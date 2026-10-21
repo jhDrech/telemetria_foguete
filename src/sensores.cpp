@@ -10,6 +10,8 @@ namespace {
 constexpr uint8_t PIN_SDA = 8;
 constexpr uint8_t PIN_SCL = 9;
 
+// VARIAVEIS PARA ACELEROMETRO
+
 static constexpr float GRAVIDADE = 9.80665f;
 static constexpr float ACC_LSB_POR_G = 8192.0f;
 static constexpr float DEG_PARA_RAD = PI / 180.0f;
@@ -35,6 +37,16 @@ static float q3Atual = 0.0f;
 
 static bool quaternionValido = false;
 
+constexpr uint32_t TEMPO_MINIMO_DMP_MS = 45000;
+constexpr uint32_t JANELA_ESTABILIDADE_MS = 5000;
+constexpr float LIMITE_VARIACAO_GRAUS = 0.10f;
+
+static uint32_t inicioDmpMS = 0;
+static uint32_t inicioJanelaMs = 0;
+
+static bool janelaEstabilidadeAtiva = false;
+
+
 //INICIALIZACAO
 
 }
@@ -46,9 +58,6 @@ bool iniciarSensores() {
 
     bmpDisponivel = false;
     icmDisponivel = false;
-
-    bool bmpDisponivel = false;
-    bool icmDisponivel = false;
 
     aceleracaoValida = false;
     quaternionValido = false;
@@ -68,6 +77,7 @@ bool iniciarSensores() {
     sucesso &= (icm.enableDMPSensor(INV_ICM20948_SENSOR_RAW_ACCELEROMETER) == ICM_20948_Stat_Ok);
 
     sucesso &= (icm.setDMPODRrate(DMP_ODR_Reg_Accel, 0) == ICM_20948_Stat_Ok);
+    sucesso &= (icm.setDMPODRrate(DMP_ODR_Reg_Quat6, 0) == ICM_20948_Stat_Ok);
     sucesso &= (icm.enableFIFO() == ICM_20948_Stat_Ok);
     sucesso &= (icm.enableDMP() == ICM_20948_Stat_Ok);
 
@@ -106,97 +116,210 @@ DadoSensor lerSensores() {
 
     dado.timestamp_us = micros();
 
+    // ========================================================
+    // BMP280
+    // ========================================================
+
     if (bmpDisponivel) {
-        dado.pressao_pa = bmp.readPressure();
-        dado.temperatura_c = bmp.readTemperature();
-        dado.altitude_m = bmp.readAltitude(1013.25f);
+
+        dado.pressao_pa =
+            bmp.readPressure();
+
+        dado.temperatura_c =
+            bmp.readTemperature();
+
+        dado.altitude_m =
+            bmp.readAltitude(1013.25f);
     }
+
+    // ========================================================
+    // DMP / FIFO
+    // ========================================================
 
     if (icmDisponivel) {
 
-           icm_20948_DMP_data_t pacote;
+        bool continuarLendo = true;
 
-           icm.readDMPdataFromFIFO(&pacote);
+        // Protecao para evitar que a funcao fique presa
+        // indefinidamente caso a FIFO continue recebendo dados.
+        constexpr int MAX_PACOTES_FIFO = 32;
+        int pacotesLidos = 0;
 
-           if (icm.status == ICM_20948_Stat_Ok || icm.status == ICM_20948_Stat_FIFOMoreDataAvail) {
-            if (pacote.header & DMP_header_bitmap_Quat6) {
-                double q1 = (double)pacote.Quat6.Data.Q1 / 1073741824.0;
-                double q2 = (double)pacote.Quat6.Data.Q2 / 1073741824.0;
-                double q3 = (double)pacote.Quat6.Data.Q3 / 1073741824.0;
+        while (
+            continuarLendo &&
+            pacotesLidos < MAX_PACOTES_FIFO
+        ) {
 
-                double termoQ0 = 1.0 - q1 * q1 - q2 * q2 - q3 * q3;
+            icm_20948_DMP_data_t pacote{};
 
-                if (termoQ0 < 0.0) {
-                    termoQ0 = 0.0;
+            icm.readDMPdataFromFIFO(&pacote);
+
+            pacotesLidos++;
+
+            // =================================================
+            // PACOTE VALIDO
+            // =================================================
+
+            if (
+                icm.status == ICM_20948_Stat_Ok ||
+                icm.status == ICM_20948_Stat_FIFOMoreDataAvail
+            ) {
+
+                // =============================================
+                // QUAT6
+                // =============================================
+
+                if (
+                    pacote.header &
+                    DMP_header_bitmap_Quat6
+                ) {
+
+                    double q1 =
+                        (double)pacote.Quat6.Data.Q1 /
+                        1073741824.0;
+
+                    double q2 =
+                        (double)pacote.Quat6.Data.Q2 /
+                        1073741824.0;
+
+                    double q3 =
+                        (double)pacote.Quat6.Data.Q3 /
+                        1073741824.0;
+
+                    // Para um quaternion normalizado:
+                    //
+                    // q0² + q1² + q2² + q3² = 1
+                    //
+                    // Portanto:
+                    //
+                    // q1² + q2² + q3² <= 1
+
+                    double soma =
+                        q1 * q1 +
+                        q2 * q2 +
+                        q3 * q3;
+
+                    // Só aceita um quaternion fisicamente
+                    // possível.
+                    if (soma <= 1.0) {
+
+                        double q0 =
+                            sqrt(1.0 - soma);
+
+                        q0Atual = q0;
+                        q1Atual = q1;
+                        q2Atual = q2;
+                        q3Atual = q3;
+
+                        quaternionValido = true;
+                    }
                 }
 
-                q0Atual =
-                    (float)sqrt(termoQ0);
+                // =============================================
+                // ACELEROMETRO
+                // =============================================
 
-                q1Atual =
-                    (float)q1;
+                if (
+                    pacote.header &
+                    DMP_header_bitmap_Accel
+                ) {
 
-                q2Atual =
-                    (float)q2;
+                    axAtual =
+                        ((float)pacote.Raw_Accel.Data.X /
+                         ACC_LSB_POR_G)
+                        * GRAVIDADE;
 
-                q3Atual =
-                    (float)q3;
+                    ayAtual =
+                        ((float)pacote.Raw_Accel.Data.Y /
+                         ACC_LSB_POR_G)
+                        * GRAVIDADE;
 
-                quaternionValido = true;
+                    azAtual =
+                        ((float)pacote.Raw_Accel.Data.Z /
+                         ACC_LSB_POR_G)
+                        * GRAVIDADE;
+
+                    aceleracaoValida = true;
+                }
             }
 
-               // =================================================
-               // ACELEROMETRO
-               // =================================================
+            // =================================================
+            // CONTROLE DA FIFO
+            // =================================================
 
-               if (pacote.header & DMP_header_bitmap_Accel) {
-                    axAtual = ((float)pacote.Raw_Accel.Data.X / ACC_LSB_POR_G) * GRAVIDADE;
-                   ayAtual = ((float)pacote.Raw_Accel.Data.Y / ACC_LSB_POR_G) * GRAVIDADE;
-                   azAtual = ((float)pacote.Raw_Accel.Data.Z / ACC_LSB_POR_G) * GRAVIDADE;
+            // Se a biblioteca disser que ainda existem pacotes,
+            // fazemos outra leitura imediatamente.
+            //
+            // Caso contrario, encerramos o while.
 
-                   aceleracaoValida = true;
-               }
-           }
+            if (
+                icm.status !=
+                ICM_20948_Stat_FIFOMoreDataAvail
+            ) {
 
-           if (icm.dataReady()) {
+                continuarLendo = false;
+            }
+        }
+    }
 
-               icm.getAGMT();
+    // ========================================================
+// GIROSCOPIO E MAGNETOMETRO
+// ========================================================
 
-               dado.gx = icm.gyrX() * DEG_PARA_RAD;
-               dado.gy = icm.gyrY() * DEG_PARA_RAD;
+    if (icmDisponivel && icm.dataReady()) {
+    
+        icm.getAGMT();
+    
+        dado.gx =
+            icm.gyrX() * DEG_PARA_RAD;
+    
+        dado.gy =
+            icm.gyrY() * DEG_PARA_RAD;
+    
+        dado.gz =
+            icm.gyrZ() * DEG_PARA_RAD;
+    
+        dado.mx =
+            icm.magX();
+    
+        dado.my =
+            icm.magY();
+    
+        dado.mz =
+            icm.magZ();
+    }
 
-               dado.gz = icm.gyrZ() * DEG_PARA_RAD;
+    // ========================================================
+    // ENTREGA A ULTIMA ACELERACAO VALIDA
+    // ========================================================
 
-               dado.mx = icm.magX();
-               dado.my = icm.magY();
-               dado.mz = icm.magZ();
-           }
-       }
+    if (aceleracaoValida) {
 
-       // --------------------------------------------------------
-       // ULTIMAS AMOSTRAS VALIDAS
-       // --------------------------------------------------------
+        dado.ax = axAtual;
+        dado.ay = ayAtual;
+        dado.az = azAtual;
+    }
 
-       if (aceleracaoValida) {
-           dado.ax = axAtual;
-           dado.ay = ayAtual;
-           dado.az = azAtual;
-       }
+    // ========================================================
+    // ENTREGA O ULTIMO QUATERNION VALIDO
+    // ========================================================
 
-       if (quaternionValido) {
-           dado.q0 = q0Atual;
-           dado.q1 = q1Atual;
-           dado.q2 = q2Atual;
-           dado.q3 = q3Atual;
-           dado.quaternion_valido = true;
-       }
-       else {
-           dado.quaternion_valido = false;
-       }
+    if (quaternionValido) {
 
-       return dado;
+        dado.q0 = (float)q0Atual;
+        dado.q1 = (float)q1Atual;
+        dado.q2 = (float)q2Atual;
+        dado.q3 = (float)q3Atual;
+
+        dado.quaternion_valido = true;
+    }
+    else {
+
+        dado.quaternion_valido = false;
+    }
+
+    return dado;
 }
-
 
 void testarTempoLeitura() {
     constexpr int N = 100;
