@@ -8,6 +8,7 @@ struct DadoSensor {
     float pressao_pa;
     float temperatura_c;
     float altitude_m;
+    float altitude_relativa_m;
 
     float ax, ay, az;
     float gx, gy, gz;
@@ -49,4 +50,5 @@ struct Calibracao {
     float giroBiasY;
     float giroBiasZ;
 
+    float pressaoInicial_pa;
 };

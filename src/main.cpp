@@ -3,11 +3,13 @@
 #include "sensores.h"
 #include "orientacao.h"
 #include "movimento.h"
+#include "calibracao.h"
 
 // Momento em que o experimento realmente começa.
 // Assim o timestamp do CSV começa próximo de zero,
 // independentemente do tempo gasto no setup.
 static uint32_t inicioTesteMs = 0;
+static Calibracao calibracao;
 
 
 void setup() {
@@ -28,6 +30,8 @@ void setup() {
             delay(1000);
         }
     }
+
+    calibracao = calibrarSistema(100, 10);
 
     // ========================================================
     // INICIALIZACAO DA ORIENTACAO / DMP
@@ -59,7 +63,8 @@ void setup() {
         "janela_estabilidade,"
         "dmp_pronto,"
         "ax_linear,ay_linear,az_linear,"
-        "aceleracao_linear_valida"
+        "aceleracao_linear_valida,"
+        "pressao_inicial_pa,altitude_relativa_m"
     );
 }
 
@@ -70,35 +75,29 @@ void loop() {
     // LEITURA DOS SENSORES
     // ========================================================
 
-    DadoSensor dado =
-        lerSensores();
-
+    DadoSensor dado = lerSensores();
 
     // ========================================================
     // ORIENTACAO / CONVERGENCIA DO DMP
     // ========================================================
 
-    EstadoDMP estadoDMP =
-        atualizarEstadoDMP(dado);
-
+    EstadoDMP estadoDMP = atualizarEstadoDMP(dado);
 
     // ========================================================
     // ACELERACAO LINEAR
     // ========================================================
 
-    calcularAceleracaoLinear(
-        dado,
-        estadoDMP.dmp_pronto
-    );
+    calcularAceleracaoLinear( dado, estadoDMP.dmp_pronto);
 
+    // ALTITUDE RELATIVA
+
+    dado.altitude_relativa_m = calcularAltitudeRelativa(dado.pressao_pa, calibracao.pressaoInicial_pa);
 
     // ========================================================
     // TEMPO RELATIVO DO EXPERIMENTO
     // ========================================================
 
-    uint32_t timestampMs =
-        millis() - inicioTesteMs;
-
+    uint32_t timestampMs = millis() - inicioTesteMs;
 
     // ========================================================
     // CSV
@@ -225,18 +224,28 @@ void loop() {
 
     Serial.print(dado.ax_linear, 5);
     Serial.print(",");
-
+    
     Serial.print(dado.ay_linear, 5);
     Serial.print(",");
-
+    
     Serial.print(dado.az_linear, 5);
     Serial.print(",");
-
-    Serial.println(
+    
+    Serial.print(
         dado.aceleracao_linear_valida ? 1 : 0
     );
-
-
+    Serial.print(",");
+    
+    Serial.print(
+        calibracao.pressaoInicial_pa,
+        2
+    );
+    Serial.print(",");
+    
+    Serial.println(
+        dado.altitude_relativa_m,
+        3
+    );
     // Aproximadamente 50 Hz.
     delay(20);
 }

@@ -9,3 +9,8 @@ DadoTratado aplicarCalibracao(
     const Calibracao& calibracao
 );
 
+float calcularAltitudeRelativa(
+    float pressaoAtual_pa,
+    float pressaoInicial_pa
+);
+

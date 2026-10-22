@@ -1,3 +1,4 @@
+#include <math.h>
 #include "calibracao.h"
 #include "sensores.h"
 
@@ -7,6 +8,7 @@ Calibracao calibrarSistema(int numeroAmostras, int intervaloMs) {
     Calibracao calibracao{};
 
     double somaAltitude = 0.0;
+    double somaPressao = 0.0;
 
     double somaGx = 0.0;
     double somaGy = 0.0;
@@ -25,6 +27,7 @@ Calibracao calibrarSistema(int numeroAmostras, int intervaloMs) {
         Serial.println(dado.gz, 5);
 
         somaAltitude += dado.altitude_m;
+        somaPressao += dado.pressao_pa;
 
         somaGx += dado.gx;
         somaGy += dado.gy;
@@ -34,6 +37,7 @@ Calibracao calibrarSistema(int numeroAmostras, int intervaloMs) {
     }
 
     calibracao.altitudeInicial_m = somaAltitude / numeroAmostras;
+    calibracao.pressaoInicial_pa = somaPressao / numeroAmostras;
     
     calibracao.giroBiasX = somaGx / numeroAmostras;
     calibracao.giroBiasY = somaGy / numeroAmostras;
@@ -62,4 +66,12 @@ DadoTratado aplicarCalibracao(const DadoSensor& dado,const Calibracao& calibraca
     tratado.mz = dado.mz;
 
     return tratado;
+}
+
+float calcularAltitudeRelativa( float pressaoAtual_pa, float pressaoInicial_pa) {
+    if ( pressaoAtual_pa <= 0.0f || pressaoInicial_pa <= 0.0f) {
+        return 0.0f;
+    }
+
+    return 44330.0f * ( 1.0f - powf( pressaoAtual_pa / pressaoInicial_pa, 0.1903f));
 }
