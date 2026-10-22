@@ -64,7 +64,8 @@ void setup() {
         "dmp_pronto,"
         "ax_linear,ay_linear,az_linear,"
         "aceleracao_linear_valida,"
-        "pressao_inicial_pa,altitude_relativa_m"
+        "pressao_inicial_pa,altitude_relativa_m,"
+        "aceleracao_vertical,aceleracao_vertical_valida"
     );
 }
 
@@ -242,9 +243,20 @@ void loop() {
     );
     Serial.print(",");
     
-    Serial.println(
+    Serial.print(
         dado.altitude_relativa_m,
         3
+    );
+    Serial.print(",");
+
+    Serial.print(
+        dado.aceleracao_vertical,
+        5
+    );
+    Serial.print(",");
+
+    Serial.println(
+        dado.aceleracao_vertical_valida ? 1 : 0
     );
     // Aproximadamente 50 Hz.
     delay(20);

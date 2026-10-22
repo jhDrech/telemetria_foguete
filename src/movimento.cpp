@@ -21,6 +21,9 @@ void calcularAceleracaoLinear(
     dado.ay_linear = 0.0f;
     dado.az_linear = 0.0f;
 
+    dado.aceleracao_vertical = 0.0f;
+    dado.aceleracao_vertical_valida = false;
+
 
     // ========================================================
     // VERIFICACAO
@@ -106,4 +109,33 @@ void calcularAceleracaoLinear(
 
 
     dado.aceleracao_linear_valida = true;
+
+    // ========================================================
+    // ACELERACAO VERTICAL
+    // ========================================================
+    //
+    // gravidadeX/Y/Z possuem modulo aproximadamente igual a g.
+    // Dividindo por GRAVIDADE obtemos o vetor unitario
+    // que aponta para baixo.
+    //
+    // Como definimos "para cima" como positivo,
+    // usamos o sinal negativo na projecao.
+        
+    float direcaoGravidadeX =
+        gravidadeX / GRAVIDADE;
+        
+    float direcaoGravidadeY =
+        gravidadeY / GRAVIDADE;
+        
+    float direcaoGravidadeZ =
+        gravidadeZ / GRAVIDADE;
+        
+    dado.aceleracao_vertical =
+        -(
+            dado.ax_linear * direcaoGravidadeX +
+            dado.ay_linear * direcaoGravidadeY +
+            dado.az_linear * direcaoGravidadeZ
+        );
+    
+    dado.aceleracao_vertical_valida = true;
 }

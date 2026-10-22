@@ -1,0 +1,1 @@
+timestamp_ms,pressao_pa,temperatura_c,altitude_m,ax,ay,az,gx,gy,gz,mx,my,mz,q0,q1,q2,q3,norma_q,quaternion_valido,roll_deg,pitch_deg,variacao_roll_deg,variacao_pitch_deg,janela_estabilidade,dmp_pronto,ax_linear,ay_linear,az_linear,aceleracao_linear_valida,pressao_inicial_pa,altitude_relativa_m,pressao_inicial_pa,altitude_relativa_m,aceleracao_vertical,aceleracao_vertical_valida
