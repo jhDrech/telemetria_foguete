@@ -16,6 +16,13 @@ struct DadoSensor {
     //orientação estimada pelo DMP
     float q0,q1,q2,q3;
     bool quaternion_valido;
+
+    //aceleracao sem a gravidade
+    float ax_linear;
+    float ay_linear;
+    float az_linear;
+
+    bool aceleracao_linear_valida;
 };
 
 struct DadoTratado{
@@ -23,17 +30,13 @@ struct DadoTratado{
 
     float altitude_relativa_m;
 
-    float ax;
-    float ay;
-    float az;
+    float ax, ay, az;
 
     float gx_corrigido;
     float gy_corrigido;
     float gz_corrigido;
 
-    float mx;
-    float my;
-    float mz;
+    float mx, my, mz;
 
     float q0,q1,q2,q3;
     bool quaternion_valido;

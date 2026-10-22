@@ -1,12 +1,26 @@
 #include <Arduino.h>
+
 #include "sensores.h"
 #include "orientacao.h"
+#include "movimento.h"
+
+// Momento em que o experimento realmente começa.
+// Assim o timestamp do CSV começa próximo de zero,
+// independentemente do tempo gasto no setup.
+static uint32_t inicioTesteMs = 0;
+
 
 void setup() {
 
     Serial.begin(115200);
 
+    // Mantemos o atraso que já estava sendo usado
+    // para estabilização da comunicação USB.
     delay(8000);
+
+    // ========================================================
+    // INICIALIZACAO DOS SENSORES
+    // ========================================================
 
     if (!iniciarSensores()) {
 
@@ -15,9 +29,21 @@ void setup() {
         }
     }
 
-    // Comeca a contar o tempo de convergencia do DMP
-    // depois que os sensores foram inicializados.
+    // ========================================================
+    // INICIALIZACAO DA ORIENTACAO / DMP
+    // ========================================================
+
     iniciarOrientacao();
+
+    // ========================================================
+    // INICIO EFETIVO DO EXPERIMENTO
+    // ========================================================
+
+    inicioTesteMs = millis();
+
+    // ========================================================
+    // CABECALHO CSV
+    // ========================================================
 
     Serial.println(
         "timestamp_ms,"
@@ -31,88 +57,129 @@ void setup() {
         "roll_deg,pitch_deg,"
         "variacao_roll_deg,variacao_pitch_deg,"
         "janela_estabilidade,"
-        "dmp_pronto"
+        "dmp_pronto,"
+        "ax_linear,ay_linear,az_linear,"
+        "aceleracao_linear_valida"
     );
 }
 
+
 void loop() {
 
-    // ------------------------------------------------------------------------
-    // AQUISICAO
-    // ------------------------------------------------------------------------
+    // ========================================================
+    // LEITURA DOS SENSORES
+    // ========================================================
 
-    DadoSensor d =
+    DadoSensor dado =
         lerSensores();
 
-    // ------------------------------------------------------------------------
-    // ORIENTACAO / CONVERGENCIA
-    // ------------------------------------------------------------------------
+
+    // ========================================================
+    // ORIENTACAO / CONVERGENCIA DO DMP
+    // ========================================================
 
     EstadoDMP estadoDMP =
-        atualizarEstadoDMP(d);
+        atualizarEstadoDMP(dado);
 
-    // ------------------------------------------------------------------------
+
+    // ========================================================
+    // ACELERACAO LINEAR
+    // ========================================================
+
+    calcularAceleracaoLinear(
+        dado,
+        estadoDMP.dmp_pronto
+    );
+
+
+    // ========================================================
+    // TEMPO RELATIVO DO EXPERIMENTO
+    // ========================================================
+
+    uint32_t timestampMs =
+        millis() - inicioTesteMs;
+
+
+    // ========================================================
     // CSV
-    // ------------------------------------------------------------------------
+    // ========================================================
 
-    Serial.print(millis());
+    Serial.print(timestampMs);
     Serial.print(",");
 
-    Serial.print(d.pressao_pa, 2);
+    Serial.print(dado.pressao_pa, 2);
     Serial.print(",");
 
-    Serial.print(d.temperatura_c, 2);
+    Serial.print(dado.temperatura_c, 2);
     Serial.print(",");
 
-    Serial.print(d.altitude_m, 3);
+    Serial.print(dado.altitude_m, 3);
     Serial.print(",");
 
-    Serial.print(d.ax, 5);
+
+    // ACELEROMETRO
+
+    Serial.print(dado.ax, 5);
     Serial.print(",");
 
-    Serial.print(d.ay, 5);
+    Serial.print(dado.ay, 5);
     Serial.print(",");
 
-    Serial.print(d.az, 5);
+    Serial.print(dado.az, 5);
     Serial.print(",");
 
-    Serial.print(d.gx, 6);
+
+    // GIROSCOPIO
+
+    Serial.print(dado.gx, 6);
     Serial.print(",");
 
-    Serial.print(d.gy, 6);
+    Serial.print(dado.gy, 6);
     Serial.print(",");
 
-    Serial.print(d.gz, 6);
+    Serial.print(dado.gz, 6);
     Serial.print(",");
 
-    Serial.print(d.mx, 3);
+
+    // MAGNETOMETRO
+
+    Serial.print(dado.mx, 3);
     Serial.print(",");
 
-    Serial.print(d.my, 3);
+    Serial.print(dado.my, 3);
     Serial.print(",");
 
-    Serial.print(d.mz, 3);
+    Serial.print(dado.mz, 3);
     Serial.print(",");
 
-    Serial.print(d.q0, 7);
+
+    // QUATERNION
+
+    Serial.print(dado.q0, 7);
     Serial.print(",");
 
-    Serial.print(d.q1, 7);
+    Serial.print(dado.q1, 7);
     Serial.print(",");
 
-    Serial.print(d.q2, 7);
+    Serial.print(dado.q2, 7);
     Serial.print(",");
 
-    Serial.print(d.q3, 7);
+    Serial.print(dado.q3, 7);
     Serial.print(",");
+
+
+    // DIAGNOSTICO DO QUATERNION
 
     Serial.print(estadoDMP.norma_q, 7);
     Serial.print(",");
 
     Serial.print(
-        d.quaternion_valido ? 1 : 0
+        dado.quaternion_valido ? 1 : 0
     );
     Serial.print(",");
+
+
+    // ORIENTACAO
 
     Serial.print(
         estadoDMP.roll_deg,
@@ -125,6 +192,9 @@ void loop() {
         4
     );
     Serial.print(",");
+
+
+    // CONVERGENCIA
 
     Serial.print(
         estadoDMP.variacao_roll_deg,
@@ -143,9 +213,30 @@ void loop() {
     );
     Serial.print(",");
 
-    Serial.println(
+    Serial.print(
         estadoDMP.dmp_pronto ? 1 : 0
     );
+    Serial.print(",");
 
+
+    // ========================================================
+    // ACELERACAO LINEAR
+    // ========================================================
+
+    Serial.print(dado.ax_linear, 5);
+    Serial.print(",");
+
+    Serial.print(dado.ay_linear, 5);
+    Serial.print(",");
+
+    Serial.print(dado.az_linear, 5);
+    Serial.print(",");
+
+    Serial.println(
+        dado.aceleracao_linear_valida ? 1 : 0
+    );
+
+
+    // Aproximadamente 50 Hz.
     delay(20);
 }

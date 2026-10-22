@@ -37,16 +37,6 @@ static float q3Atual = 0.0f;
 
 static bool quaternionValido = false;
 
-constexpr uint32_t TEMPO_MINIMO_DMP_MS = 45000;
-constexpr uint32_t JANELA_ESTABILIDADE_MS = 5000;
-constexpr float LIMITE_VARIACAO_GRAUS = 0.10f;
-
-static uint32_t inicioDmpMS = 0;
-static uint32_t inicioJanelaMs = 0;
-
-static bool janelaEstabilidadeAtiva = false;
-
-
 //INICIALIZACAO
 
 }
