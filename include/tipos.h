@@ -27,6 +27,9 @@ struct DadoSensor {
     
     float aceleracao_vertical;
     bool aceleracao_vertical_valida;
+
+    float velocidade_vertical;
+    bool velocidade_vertical_valida;
 };
 
 struct DadoTratado{

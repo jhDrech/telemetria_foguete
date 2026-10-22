@@ -14,7 +14,8 @@
 // aceleracao_linear_valida
 //
 // dentro do proprio DadoSensor.
-void calcularAceleracaoLinear(
-    DadoSensor& dado,
-    bool dmpPronto
-);
+void iniciarMovimento();
+
+void calcularAceleracaoLinear( DadoSensor& dado, bool dmpPronto);
+
+void atualizarVelocidadeVertical( DadoSensor& dado);

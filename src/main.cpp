@@ -39,6 +39,10 @@ void setup() {
 
     iniciarOrientacao();
 
+    //INICIALIZACAO DO MOVIMENTO
+
+    iniciarMovimento();
+
     // ========================================================
     // INICIO EFETIVO DO EXPERIMENTO
     // ========================================================
@@ -65,7 +69,8 @@ void setup() {
         "ax_linear,ay_linear,az_linear,"
         "aceleracao_linear_valida,"
         "pressao_inicial_pa,altitude_relativa_m,"
-        "aceleracao_vertical,aceleracao_vertical_valida"
+        "aceleracao_vertical,aceleracao_vertical_valida,"
+        "velocidade_vertical,velocidade_vertical_valida"
     );
 }
 
@@ -89,6 +94,10 @@ void loop() {
     // ========================================================
 
     calcularAceleracaoLinear( dado, estadoDMP.dmp_pronto);
+    
+    //VELOCIDADE VERTICAL
+
+    atualizarVelocidadeVertical(dado);
 
     // ALTITUDE RELATIVA
 
@@ -249,15 +258,27 @@ void loop() {
     );
     Serial.print(",");
 
+    //ACELERACAO
+
+    Serial.print(dado.aceleracao_vertical, 5);
+    Serial.print(",");
+
     Serial.print(
-        dado.aceleracao_vertical,
-        5
+        dado.aceleracao_vertical_valida ? 1 : 0
     );
     Serial.print(",");
 
+    // VELOCIDADE
+
+    Serial.print(dado.velocidade_vertical, 5);
+    Serial.print(",");
+
     Serial.println(
-        dado.aceleracao_vertical_valida ? 1 : 0
+        dado.velocidade_vertical_valida ? 1 : 0
     );
+
     // Aproximadamente 50 Hz.
     delay(20);
+
+
 }
