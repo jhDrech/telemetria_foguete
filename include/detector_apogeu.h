@@ -4,7 +4,8 @@ struct DetectorApogeu {
     float altitudeAtual_m,
           altitudeAnterior_m,
           maiorAltitude_m;
-    int leiturasEmQueda;
+    int leiturasEmQueda,
+        leiturasSemQuedaSignificativa;
     bool apogeuDetectado;
 };
 

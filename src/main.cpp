@@ -4,12 +4,16 @@
 #include "orientacao.h"
 #include "movimento.h"
 #include "calibracao.h"
+#include "detector_apogeu.h"
+#include "controle_paraquedas.h"
 
 // Momento em que o experimento realmente começa.
 // Assim o timestamp do CSV começa próximo de zero,
 // independentemente do tempo gasto no setup.
 static uint32_t inicioTesteMs = 0;
 static Calibracao calibracao;
+static DetectorApogeu detectorApogeu;
+static ControleParaquedas controleParaquedas;
 
 
 void setup() {
@@ -32,23 +36,27 @@ void setup() {
     }
 
     calibracao = calibrarSistema(100, 10);
-
+    
     // ========================================================
     // INICIALIZACAO DA ORIENTACAO / DMP
     // ========================================================
-
+    
     iniciarOrientacao();
-
+    
     //INICIALIZACAO DO MOVIMENTO
-
+    
     iniciarMovimento();
-
+    
     // ========================================================
     // INICIO EFETIVO DO EXPERIMENTO
     // ========================================================
-
+    
+    
     inicioTesteMs = millis();
-
+    
+    detectorApogeu = inicializarDetectorApogeu();
+    
+    controleParaquedas = inicializarControleParaquedas();
     // ========================================================
     // CABECALHO CSV
     // ========================================================
@@ -102,6 +110,11 @@ void loop() {
     // ALTITUDE RELATIVA
 
     dado.altitude_relativa_m = calcularAltitudeRelativa(dado.pressao_pa, calibracao.pressaoInicial_pa);
+
+    // Passando no detector de apogeu
+
+    atualizarDetectorApogeu(detectorApogeu, dado.altitude_relativa_m);
+    paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
 
     // ========================================================
     // TEMPO RELATIVO DO EXPERIMENTO
