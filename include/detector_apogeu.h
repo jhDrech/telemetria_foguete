@@ -1,14 +1,24 @@
-#pragma once
+
+#ifndef DETECTOR_APOGEU_H
+#define DETECTOR_APOGEU_H
 
 struct DetectorApogeu {
-    float altitudeAtual_m,
-          altitudeAnterior_m,
-          maiorAltitude_m;
-    int leiturasEmQueda,
-        leiturasSemQuedaSignificativa;
+    float altitudeAtual_m;
+    float altitudeAnterior_m;
+    float maiorAltitude_m;
+
+    int leiturasEmQueda;
+    int leiturasSemQuedaSignificativa;
+
+    bool primeiraLeituraRecebida;
     bool apogeuDetectado;
 };
 
 DetectorApogeu inicializarDetectorApogeu();
 
-void atualizarDetectorApogeu (DetectorApogeu& detector, float altitudeMedida_m);
+void atualizarDetectorApogeu(
+    DetectorApogeu& detector,
+    float altitudeMedida_m
+);
+
+#endif

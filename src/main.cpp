@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <ESP32Servo.h>
 
 #include "sensores.h"
 #include "orientacao.h"
@@ -14,9 +15,14 @@ static uint32_t inicioTesteMs = 0;
 static Calibracao calibracao;
 static DetectorApogeu detectorApogeu;
 static ControleParaquedas controleParaquedas;
+static Servo servoParaquedas;
 
+static const int ANGULO_INICIAL = 180;
+static const int ANGULO_ACIONAMENTO = 60;
+static EstadoParaquedas ultimoEstado = EstadoParaquedas::AGUARDANDO;
 
-void setup() {
+void setup()
+{
 
     Serial.begin(115200);
 
@@ -28,35 +34,40 @@ void setup() {
     // INICIALIZACAO DOS SENSORES
     // ========================================================
 
-    if (!iniciarSensores()) {
+    if (!iniciarSensores())
+    {
 
-        while (true) {
+        while (true)
+        {
             delay(1000);
         }
     }
 
     calibracao = calibrarSistema(100, 10);
-    
+
     // ========================================================
     // INICIALIZACAO DA ORIENTACAO / DMP
     // ========================================================
-    
+
     iniciarOrientacao();
-    
-    //INICIALIZACAO DO MOVIMENTO
-    
+
+    // INICIALIZACAO DO MOVIMENTO
+
     iniciarMovimento();
-    
+
     // ========================================================
     // INICIO EFETIVO DO EXPERIMENTO
     // ========================================================
-    
-    
+
     inicioTesteMs = millis();
-    
+
     detectorApogeu = inicializarDetectorApogeu();
-    
+
     controleParaquedas = inicializarControleParaquedas();
+
+    // configuração do servo
+    servoParaquedas.attach(10);
+    servoParaquedas.write(ANGULO_INICIAL);
     // ========================================================
     // CABECALHO CSV
     // ========================================================
@@ -78,12 +89,12 @@ void setup() {
         "aceleracao_linear_valida,"
         "pressao_inicial_pa,altitude_relativa_m,"
         "aceleracao_vertical,aceleracao_vertical_valida,"
-        "velocidade_vertical,velocidade_vertical_valida"
-    );
+        "velocidade_vertical,velocidade_vertical_valida,"
+        "estado_paraquedas");
 }
 
-
-void loop() {
+void loop()
+{
 
     // ========================================================
     // LEITURA DOS SENSORES
@@ -101,9 +112,9 @@ void loop() {
     // ACELERACAO LINEAR
     // ========================================================
 
-    calcularAceleracaoLinear( dado, estadoDMP.dmp_pronto);
-    
-    //VELOCIDADE VERTICAL
+    calcularAceleracaoLinear(dado, estadoDMP.dmp_pronto);
+
+    // VELOCIDADE VERTICAL
 
     atualizarVelocidadeVertical(dado);
 
@@ -115,6 +126,23 @@ void loop() {
 
     atualizarDetectorApogeu(detectorApogeu, dado.altitude_relativa_m);
     paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
+
+    if (controleParaquedas.estado != ultimoEstado)
+    {
+        switch (controleParaquedas.estado)
+        {
+        case EstadoParaquedas::ACIONADO:
+            servoParaquedas.write(ANGULO_ACIONAMENTO);
+            break;
+        case EstadoParaquedas::FINALIZADO:
+            servoParaquedas.write(ANGULO_INICIAL);
+            break;
+        default:
+            break;
+        }
+
+        ultimoEstado = controleParaquedas.estado;
+    }
 
     // ========================================================
     // TEMPO RELATIVO DO EXPERIMENTO
@@ -138,7 +166,6 @@ void loop() {
     Serial.print(dado.altitude_m, 3);
     Serial.print(",");
 
-
     // ACELEROMETRO
 
     Serial.print(dado.ax, 5);
@@ -149,7 +176,6 @@ void loop() {
 
     Serial.print(dado.az, 5);
     Serial.print(",");
-
 
     // GIROSCOPIO
 
@@ -162,7 +188,6 @@ void loop() {
     Serial.print(dado.gz, 6);
     Serial.print(",");
 
-
     // MAGNETOMETRO
 
     Serial.print(dado.mx, 3);
@@ -173,7 +198,6 @@ void loop() {
 
     Serial.print(dado.mz, 3);
     Serial.print(",");
-
 
     // QUATERNION
 
@@ -189,57 +213,46 @@ void loop() {
     Serial.print(dado.q3, 7);
     Serial.print(",");
 
-
     // DIAGNOSTICO DO QUATERNION
 
     Serial.print(estadoDMP.norma_q, 7);
     Serial.print(",");
 
     Serial.print(
-        dado.quaternion_valido ? 1 : 0
-    );
+        dado.quaternion_valido ? 1 : 0);
     Serial.print(",");
-
 
     // ORIENTACAO
 
     Serial.print(
         estadoDMP.roll_deg,
-        4
-    );
+        4);
     Serial.print(",");
 
     Serial.print(
         estadoDMP.pitch_deg,
-        4
-    );
+        4);
     Serial.print(",");
-
 
     // CONVERGENCIA
 
     Serial.print(
         estadoDMP.variacao_roll_deg,
-        4
-    );
+        4);
     Serial.print(",");
 
     Serial.print(
         estadoDMP.variacao_pitch_deg,
-        4
-    );
+        4);
     Serial.print(",");
 
     Serial.print(
-        estadoDMP.janela_estabilidade ? 1 : 0
-    );
+        estadoDMP.janela_estabilidade ? 1 : 0);
     Serial.print(",");
 
     Serial.print(
-        estadoDMP.dmp_pronto ? 1 : 0
-    );
+        estadoDMP.dmp_pronto ? 1 : 0);
     Serial.print(",");
-
 
     // ========================================================
     // ACELERACAO LINEAR
@@ -247,38 +260,34 @@ void loop() {
 
     Serial.print(dado.ax_linear, 5);
     Serial.print(",");
-    
+
     Serial.print(dado.ay_linear, 5);
     Serial.print(",");
-    
+
     Serial.print(dado.az_linear, 5);
     Serial.print(",");
-    
+
     Serial.print(
-        dado.aceleracao_linear_valida ? 1 : 0
-    );
-    Serial.print(",");
-    
-    Serial.print(
-        calibracao.pressaoInicial_pa,
-        2
-    );
-    Serial.print(",");
-    
-    Serial.print(
-        dado.altitude_relativa_m,
-        3
-    );
+        dado.aceleracao_linear_valida ? 1 : 0);
     Serial.print(",");
 
-    //ACELERACAO
+    Serial.print(
+        calibracao.pressaoInicial_pa,
+        2);
+    Serial.print(",");
+
+    Serial.print(
+        dado.altitude_relativa_m,
+        3);
+    Serial.print(",");
+
+    // ACELERACAO
 
     Serial.print(dado.aceleracao_vertical, 5);
     Serial.print(",");
 
     Serial.print(
-        dado.aceleracao_vertical_valida ? 1 : 0
-    );
+        dado.aceleracao_vertical_valida ? 1 : 0);
     Serial.print(",");
 
     // VELOCIDADE
@@ -286,12 +295,15 @@ void loop() {
     Serial.print(dado.velocidade_vertical, 5);
     Serial.print(",");
 
+    Serial.print(
+        dado.velocidade_vertical_valida ? 1 : 0);
+    Serial.print(",");
+
+    // PARAQUEDAS
+
     Serial.println(
-        dado.velocidade_vertical_valida ? 1 : 0
-    );
+        static_cast<int>(controleParaquedas.estado));
 
     // Aproximadamente 50 Hz.
     delay(20);
-
-
-}
+};
