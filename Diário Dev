@@ -1,0 +1,34 @@
+# Diário de desenvolvimento — Telemetria do foguete
+
+## Implementações concluídas
+
+- Criado o módulo `detector_lancamento`.
+  - Detecção baseada na aceleração vertical.
+  - Limite inicial de 15 m/s².
+  - Exigência de três leituras consecutivas acima do limite.
+  - Detecção permanece registrada após confirmação.
+
+- Revisado o módulo `detector_apogeu`.
+  - Acompanhamento da altitude atual e máxima.
+  - Identificação de quedas consecutivas.
+  - Tolerância inicial de 0,3 m.
+  - Exigência de cinco leituras de queda.
+  - Altitude mínima inicial de 5 m.
+  - Interrupção do processamento após detectar o apogeu.
+
+- Integrados os detectores ao `main.cpp`.
+  - Detector de apogeu condicionado à confirmação do lançamento.
+  - Registro de `lancamento_detectado` no CSV.
+
+## Pendências
+
+1. Criar testes simulados para o detector de lançamento.
+2. Criar testes simulados para o detector de apogeu.
+3. Revisar a integração entre lançamento, apogeu e controle do paraquedas.
+4. Verificar o comportamento do DMP durante a inicialização.
+5. Validar experimentalmente as constantes provisórias.
+6. Testar o acionamento do servo em condições controladas.
+
+## Próxima atividade
+
+Começar pelos testes simulados do detector de lançamento e do detector de apogeu, sem depender do hardware físico.

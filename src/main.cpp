@@ -7,6 +7,7 @@
 #include "calibracao.h"
 #include "detector_apogeu.h"
 #include "controle_paraquedas.h"
+#include "detector_lancamento.h"
 
 // Momento em que o experimento realmente começa.
 // Assim o timestamp do CSV começa próximo de zero,
@@ -16,6 +17,7 @@ static Calibracao calibracao;
 static DetectorApogeu detectorApogeu;
 static ControleParaquedas controleParaquedas;
 static Servo servoParaquedas;
+static DetectorLancamento detectorLancamento;
 
 static const int ANGULO_INICIAL = 180;
 static const int ANGULO_ACIONAMENTO = 60;
@@ -65,6 +67,8 @@ void setup()
 
     controleParaquedas = inicializarControleParaquedas();
 
+    detectorLancamento = inicializarDetectorLancamento();
+
     // configuração do servo
     servoParaquedas.attach(10);
     servoParaquedas.write(ANGULO_INICIAL);
@@ -90,6 +94,7 @@ void setup()
         "pressao_inicial_pa,altitude_relativa_m,"
         "aceleracao_vertical,aceleracao_vertical_valida,"
         "velocidade_vertical,velocidade_vertical_valida,"
+        "lancamento_detectado,"
         "estado_paraquedas");
 }
 
@@ -118,13 +123,22 @@ void loop()
 
     atualizarVelocidadeVertical(dado);
 
+    atualizarDetectorLancamento(
+        detectorLancamento,
+        dado.aceleracao_vertical,
+        dado.aceleracao_vertical_valida
+    );
+
     // ALTITUDE RELATIVA
 
     dado.altitude_relativa_m = calcularAltitudeRelativa(dado.pressao_pa, calibracao.pressaoInicial_pa);
 
     // Passando no detector de apogeu
 
-    atualizarDetectorApogeu(detectorApogeu, dado.altitude_relativa_m);
+    if (detectorLancamento.lancamentoDetectado) {
+        atualizarDetectorApogeu(detectorApogeu, dado.altitude_relativa_m);
+    }
+
     paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
 
     if (controleParaquedas.estado != ultimoEstado)
@@ -298,6 +312,9 @@ void loop()
     Serial.print(
         dado.velocidade_vertical_valida ? 1 : 0);
     Serial.print(",");
+
+    Serial.print(detectorLancamento.lancamentoDetectado ? 1 : 0);
+        Serial.print(",");
 
     // PARAQUEDAS
 

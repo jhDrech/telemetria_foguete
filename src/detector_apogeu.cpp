@@ -23,6 +23,10 @@ void atualizarDetectorApogeu(
 ) {
     const float tolerancia_m = 0.3f;
 
+    if(detector.apogeuDetectado){
+        return;
+    }
+
     // A primeira medição estabelece a referência inicial.
     if (!detector.primeiraLeituraRecebida) {
         detector.altitudeAtual_m = altitudeMedida_m;
@@ -66,7 +70,8 @@ void atualizarDetectorApogeu(
 
     // Confirma o apogeu após cinco leituras consecutivas de queda.
     if (detector.leiturasEmQueda >= 5 &&
-        !detector.apogeuDetectado) {
+        !detector.apogeuDetectado && 
+        detector.maiorAltitude_m >= ALTITUDE_MINIMA_PARA_APOGEU) {
 
         detector.apogeuDetectado = true;
     }
