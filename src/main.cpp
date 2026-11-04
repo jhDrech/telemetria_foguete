@@ -8,6 +8,8 @@
 #include "detector_apogeu.h"
 #include "controle_paraquedas.h"
 #include "detector_lancamento.h"
+#include "filtro_kalman.h"
+#include "armazenamento.h"
 
 // Momento em que o experimento realmente começa.
 // Assim o timestamp do CSV começa próximo de zero,
@@ -18,10 +20,33 @@ static DetectorApogeu detectorApogeu;
 static ControleParaquedas controleParaquedas;
 static Servo servoParaquedas;
 static DetectorLancamento detectorLancamento;
+static FiltroKalmanAltitude filtroAltitude;
 
 static const int ANGULO_INICIAL = 180;
 static const int ANGULO_ACIONAMENTO = 60;
 static EstadoParaquedas ultimoEstado = EstadoParaquedas::AGUARDANDO;
+
+const char *CABECALHO_CSV =
+    "timestamp_ms,"
+    "pressao_pa,temperatura_c,altitude_m,"
+    "ax,ay,az,"
+    "gx,gy,gz,"
+    "mx,my,mz,"
+    "q0,q1,q2,q3,"
+    "norma_q,"
+    "quaternion_valido,"
+    "roll_deg,pitch_deg,"
+    "variacao_roll_deg,variacao_pitch_deg,"
+    "janela_estabilidade,"
+    "dmp_pronto,"
+    "ax_linear,ay_linear,az_linear,"
+    "aceleracao_linear_valida,"
+    "pressao_inicial_pa,altitude_relativa_m,"
+    "altitude_filtrada_m,"
+    "aceleracao_vertical,aceleracao_vertical_valida,"
+    "velocidade_vertical,velocidade_vertical_valida,"
+    "lancamento_detectado,"
+    "estado_paraquedas";
 
 void setup()
 {
@@ -53,6 +78,15 @@ void setup()
 
     iniciarOrientacao();
 
+    // Filtro de kalman
+
+    filtroAltitude = inicializarFiltroKalman(
+        0.0f,  // estimativa inicial (m)
+        1.0f,  // incerteza inicial (m²)
+        0.01f, // ruidoProcesso (m²)
+        0.25f  // ruidoMedicao (m²)
+    );
+
     // INICIALIZACAO DO MOVIMENTO
 
     iniciarMovimento();
@@ -60,8 +94,6 @@ void setup()
     // ========================================================
     // INICIO EFETIVO DO EXPERIMENTO
     // ========================================================
-
-    inicioTesteMs = millis();
 
     detectorApogeu = inicializarDetectorApogeu();
 
@@ -72,30 +104,35 @@ void setup()
     // configuração do servo
     servoParaquedas.attach(10);
     servoParaquedas.write(ANGULO_INICIAL);
+
+    if (!iniciarArmazenamento())
+    {
+        Serial.println("Erro ao iniciar armazenamento!");
+
+        while (true)
+        {
+            delay(1000);
+        }
+    }
+
+    
     // ========================================================
     // CABECALHO CSV
     // ========================================================
 
-    Serial.println(
-        "timestamp_ms,"
-        "pressao_pa,temperatura_c,altitude_m,"
-        "ax,ay,az,"
-        "gx,gy,gz,"
-        "mx,my,mz,"
-        "q0,q1,q2,q3,"
-        "norma_q,"
-        "quaternion_valido,"
-        "roll_deg,pitch_deg,"
-        "variacao_roll_deg,variacao_pitch_deg,"
-        "janela_estabilidade,"
-        "dmp_pronto,"
-        "ax_linear,ay_linear,az_linear,"
-        "aceleracao_linear_valida,"
-        "pressao_inicial_pa,altitude_relativa_m,"
-        "aceleracao_vertical,aceleracao_vertical_valida,"
-        "velocidade_vertical,velocidade_vertical_valida,"
-        "lancamento_detectado,"
-        "estado_paraquedas");
+    Serial.println(CABECALHO_CSV);
+
+    if (!criarArquivoCSV("/experimento.csv", CABECALHO_CSV))
+    {
+        Serial.println("Erro ao criar arquivo CSV!");
+
+        while (true)
+        {
+            delay(1000);
+        }
+    }
+
+    inicioTesteMs = millis();
 }
 
 void loop()
@@ -126,17 +163,25 @@ void loop()
     atualizarDetectorLancamento(
         detectorLancamento,
         dado.aceleracao_vertical,
-        dado.aceleracao_vertical_valida
-    );
+        dado.aceleracao_vertical_valida);
 
     // ALTITUDE RELATIVA
 
     dado.altitude_relativa_m = calcularAltitudeRelativa(dado.pressao_pa, calibracao.pressaoInicial_pa);
 
+    // Aplicação do Filtro
+
+    atualizarFiltroKalman(
+        filtroAltitude,
+        dado.altitude_relativa_m);
+
     // Passando no detector de apogeu
 
-    if (detectorLancamento.lancamentoDetectado) {
-        atualizarDetectorApogeu(detectorApogeu, dado.altitude_relativa_m);
+    if (detectorLancamento.lancamentoDetectado)
+    {
+        atualizarDetectorApogeu(
+            detectorApogeu,
+            filtroAltitude.estimativa);
     }
 
     paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
@@ -285,14 +330,13 @@ void loop()
         dado.aceleracao_linear_valida ? 1 : 0);
     Serial.print(",");
 
-    Serial.print(
-        calibracao.pressaoInicial_pa,
-        2);
+    Serial.print(calibracao.pressaoInicial_pa, 2);
     Serial.print(",");
 
-    Serial.print(
-        dado.altitude_relativa_m,
-        3);
+    Serial.print(dado.altitude_relativa_m, 3);
+    Serial.print(",");
+
+    Serial.print(filtroAltitude.estimativa, 3);
     Serial.print(",");
 
     // ACELERACAO
@@ -314,7 +358,7 @@ void loop()
     Serial.print(",");
 
     Serial.print(detectorLancamento.lancamentoDetectado ? 1 : 0);
-        Serial.print(",");
+    Serial.print(",");
 
     // PARAQUEDAS
 
