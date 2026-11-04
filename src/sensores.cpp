@@ -32,22 +32,11 @@ bool iniciarSensores(){
 
 void loop(){
     DadoSensor dados;
-    dados.temp = lerTemperatura();
-    dados.pressao = lerPressao();
+    dados.temp = bmp.readTemperature();
+    dados.pressao = bmp.readPressure();
     Serial.println(dados.temp);
     Serial.println(dados.pressao);
 }
-
-float lerPressao(){
-    float pressao = bmp.readPressure();
-    return pressao;
-}
-
-float lerTemperatura(){
-    float temp = bmp.readTemperature();
-    return temp;
-}
-
 namespace sensor {
     bool lerSensores(DadoSensor& dado){
         if(!icm.dataReady()){
@@ -75,5 +64,24 @@ namespace sensor {
     
         return true;
     }
+
+float atualizarpressaoinicial(float& pressaoinicial){
+    static float soma_pressao = 0;
+    static int qtd_aquisicoes = 0;
+    static bool pressao_pronta = false;
+    static uint32_t inicio = millis();
+
+    soma_pressao += bmp.readPressure();
+    qtd_aquisicoes++;
+
+    // desse jeito não para o código pra esperar só o bmp
+    if(millis() - inicio >= 40000){
+        pressaoinicial = soma_pressao / qtd_aquisicoes;
+        pressao_pronta = true;
+    }
+    
+    return pressao_pronta;
+}
+
 }
 

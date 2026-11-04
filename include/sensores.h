@@ -1,5 +1,8 @@
 #pragma once
 #include <Arduino.h>
+
+bool iniciarSensores();
+bool lerSensores(DadoSensor& dados);
 struct DadoSensor{
     uint32_t timestamp_ms;
 
@@ -15,5 +18,4 @@ struct DadoEstimado{
     float velocidade_vertical;
 };
 
-bool iniciarSensores();
-bool lerSensores(DadoSensor& dados);
+bool calibrarInicial(float& pressaoInicial, float& biasAx, float& biasAy, float& biasAz);
