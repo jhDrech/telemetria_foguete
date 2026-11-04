@@ -14,4 +14,6 @@ bool registrarDado(const String& linha);
 
 void finalizarArmazenamento();
 
+bool gravacaoEmAndamento();
+
 #endif

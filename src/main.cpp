@@ -21,6 +21,18 @@ static ControleParaquedas controleParaquedas;
 static Servo servoParaquedas;
 static DetectorLancamento detectorLancamento;
 static FiltroKalmanAltitude filtroAltitude;
+static String linhaCSV;
+
+enum class EstadoGravacao {
+    AGUARDANDO,
+    GRAVANDO,
+    FINALIZADA
+};
+
+static EstadoGravacao estadoGravacao = EstadoGravacao::AGUARDANDO;
+static const uint32_t TEMPO_REGISTRO_APOS_LANCAMENTO_MS = 40000;
+static uint32_t instanteLancamentoMs = 0;
+static bool contagemRegistroIniciada = false;
 
 static const int ANGULO_INICIAL = 180;
 static const int ANGULO_ACIONAMENTO = 60;
@@ -115,7 +127,6 @@ void setup()
         }
     }
 
-    
     // ========================================================
     // CABECALHO CSV
     // ========================================================
@@ -131,6 +142,8 @@ void setup()
             delay(1000);
         }
     }
+
+    linhaCSV.reserve(512);
 
     inicioTesteMs = millis();
 }
@@ -164,6 +177,13 @@ void loop()
         detectorLancamento,
         dado.aceleracao_vertical,
         dado.aceleracao_vertical_valida);
+
+    if (detectorLancamento.lancamentoDetectado &&
+        !contagemRegistroIniciada)
+    {
+        instanteLancamentoMs = millis();
+        contagemRegistroIniciada = true;
+    }
 
     // ALTITUDE RELATIVA
 
@@ -213,157 +233,91 @@ void loop()
     // CSV
     // ========================================================
 
-    Serial.print(timestampMs);
-    Serial.print(",");
+    linhaCSV = "";
 
-    Serial.print(dado.pressao_pa, 2);
-    Serial.print(",");
-
-    Serial.print(dado.temperatura_c, 2);
-    Serial.print(",");
-
-    Serial.print(dado.altitude_m, 3);
-    Serial.print(",");
+    linhaCSV = String(timestampMs) + ",";
+    linhaCSV += String(dado.pressao_pa, 2) + ",";
+    linhaCSV += String(dado.temperatura_c, 2) + ",";
+    linhaCSV += String(dado.altitude_m, 3) + ",";
 
     // ACELEROMETRO
-
-    Serial.print(dado.ax, 5);
-    Serial.print(",");
-
-    Serial.print(dado.ay, 5);
-    Serial.print(",");
-
-    Serial.print(dado.az, 5);
-    Serial.print(",");
+    linhaCSV += String(dado.ax, 5) + ",";
+    linhaCSV += String(dado.ay, 5) + ",";
+    linhaCSV += String(dado.az, 5) + ",";
 
     // GIROSCOPIO
-
-    Serial.print(dado.gx, 6);
-    Serial.print(",");
-
-    Serial.print(dado.gy, 6);
-    Serial.print(",");
-
-    Serial.print(dado.gz, 6);
-    Serial.print(",");
+    linhaCSV += String(dado.gx, 6) + ",";
+    linhaCSV += String(dado.gy, 6) + ",";
+    linhaCSV += String(dado.gz, 6) + ",";
 
     // MAGNETOMETRO
-
-    Serial.print(dado.mx, 3);
-    Serial.print(",");
-
-    Serial.print(dado.my, 3);
-    Serial.print(",");
-
-    Serial.print(dado.mz, 3);
-    Serial.print(",");
+    linhaCSV += String(dado.mx, 3) + ",";
+    linhaCSV += String(dado.my, 3) + ",";
+    linhaCSV += String(dado.mz, 3) + ",";
 
     // QUATERNION
-
-    Serial.print(dado.q0, 7);
-    Serial.print(",");
-
-    Serial.print(dado.q1, 7);
-    Serial.print(",");
-
-    Serial.print(dado.q2, 7);
-    Serial.print(",");
-
-    Serial.print(dado.q3, 7);
-    Serial.print(",");
+    linhaCSV += String(dado.q0, 7) + ",";
+    linhaCSV += String(dado.q1, 7) + ",";
+    linhaCSV += String(dado.q2, 7) + ",";
+    linhaCSV += String(dado.q3, 7) + ",";
 
     // DIAGNOSTICO DO QUATERNION
-
-    Serial.print(estadoDMP.norma_q, 7);
-    Serial.print(",");
-
-    Serial.print(
-        dado.quaternion_valido ? 1 : 0);
-    Serial.print(",");
+    linhaCSV += String(estadoDMP.norma_q, 7) + ",";
+    linhaCSV += String(dado.quaternion_valido ? 1 : 0) + ",";
 
     // ORIENTACAO
-
-    Serial.print(
-        estadoDMP.roll_deg,
-        4);
-    Serial.print(",");
-
-    Serial.print(
-        estadoDMP.pitch_deg,
-        4);
-    Serial.print(",");
+    linhaCSV += String(estadoDMP.roll_deg, 4) + ",";
+    linhaCSV += String(estadoDMP.pitch_deg, 4) + ",";
 
     // CONVERGENCIA
+    linhaCSV += String(estadoDMP.variacao_roll_deg, 4) + ",";
+    linhaCSV += String(estadoDMP.variacao_pitch_deg, 4) + ",";
+    linhaCSV += String(estadoDMP.janela_estabilidade ? 1 : 0) + ",";
+    linhaCSV += String(estadoDMP.dmp_pronto ? 1 : 0) + ",";
 
-    Serial.print(
-        estadoDMP.variacao_roll_deg,
-        4);
-    Serial.print(",");
-
-    Serial.print(
-        estadoDMP.variacao_pitch_deg,
-        4);
-    Serial.print(",");
-
-    Serial.print(
-        estadoDMP.janela_estabilidade ? 1 : 0);
-    Serial.print(",");
-
-    Serial.print(
-        estadoDMP.dmp_pronto ? 1 : 0);
-    Serial.print(",");
-
-    // ========================================================
     // ACELERACAO LINEAR
-    // ========================================================
+    linhaCSV += String(dado.ax_linear, 5) + ",";
+    linhaCSV += String(dado.ay_linear, 5) + ",";
+    linhaCSV += String(dado.az_linear, 5) + ",";
+    linhaCSV += String(dado.aceleracao_linear_valida ? 1 : 0) + ",";
 
-    Serial.print(dado.ax_linear, 5);
-    Serial.print(",");
+    // CALIBRACAO E ALTITUDE
+    linhaCSV += String(calibracao.pressaoInicial_pa, 2) + ",";
+    linhaCSV += String(dado.altitude_relativa_m, 3) + ",";
+    linhaCSV += String(filtroAltitude.estimativa, 3) + ",";
 
-    Serial.print(dado.ay_linear, 5);
-    Serial.print(",");
+    // ACELERACAO VERTICAL
+    linhaCSV += String(dado.aceleracao_vertical, 5) + ",";
+    linhaCSV += String(dado.aceleracao_vertical_valida ? 1 : 0) + ",";
 
-    Serial.print(dado.az_linear, 5);
-    Serial.print(",");
+    // VELOCIDADE VERTICAL
+    linhaCSV += String(dado.velocidade_vertical, 5) + ",";
+    linhaCSV += String(dado.velocidade_vertical_valida ? 1 : 0) + ",";
 
-    Serial.print(
-        dado.aceleracao_linear_valida ? 1 : 0);
-    Serial.print(",");
+    // DETECCAO DE LANCAMENTO
+    linhaCSV += String(detectorLancamento.lancamentoDetectado ? 1 : 0) + ",";
 
-    Serial.print(calibracao.pressaoInicial_pa, 2);
-    Serial.print(",");
+    // ESTADO DO PARAQUEDAS
+    linhaCSV += String(static_cast<int>(controleParaquedas.estado));
 
-    Serial.print(dado.altitude_relativa_m, 3);
-    Serial.print(",");
+    Serial.println(linhaCSV);
 
-    Serial.print(filtroAltitude.estimativa, 3);
-    Serial.print(",");
+    if (contagemRegistroIniciada &&
+    millis() - instanteLancamentoMs >= TEMPO_REGISTRO_APOS_LANCAMENTO_MS)
+    {
+        if (!registrarDado(linhaCSV))
+        {
+            Serial.println("Erro ao registrar dado no armazenamento!");
+        }
 
-    // ACELERACAO
+        if (controleParaquedas.estado == EstadoParaquedas::FINALIZADO)
+        {
+            finalizarArmazenamento();
+            gravacaoFinalizada = true;
 
-    Serial.print(dado.aceleracao_vertical, 5);
-    Serial.print(",");
-
-    Serial.print(
-        dado.aceleracao_vertical_valida ? 1 : 0);
-    Serial.print(",");
-
-    // VELOCIDADE
-
-    Serial.print(dado.velocidade_vertical, 5);
-    Serial.print(",");
-
-    Serial.print(
-        dado.velocidade_vertical_valida ? 1 : 0);
-    Serial.print(",");
-
-    Serial.print(detectorLancamento.lancamentoDetectado ? 1 : 0);
-    Serial.print(",");
-
-    // PARAQUEDAS
-
-    Serial.println(
-        static_cast<int>(controleParaquedas.estado));
+            Serial.println("Gravacao encerrada.");
+        }
+    }
 
     // Aproximadamente 50 Hz.
     delay(20);

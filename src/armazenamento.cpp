@@ -9,6 +9,8 @@ File arquivoCSV;
 bool armazenamentoIniciado = false;
 bool arquivoAberto = false;
 
+unsigned int quantidadeRegistros = 0;
+
 }
 
 // ========================================================
@@ -56,6 +58,7 @@ bool criarArquivoCSV(
 
     arquivoCSV.flush();
 
+    quantidadeRegistros = 0;
     arquivoAberto = true;
 
     Serial.println("Arquivo CSV criado!");
@@ -74,7 +77,17 @@ bool registrarDado(const String& linha) {
     }
 
     if (arquivoCSV.println(linha) == 0) {
+        Serial.println("Falha ao escrever no arquivo CSV!");
         return false;
+    }
+
+    quantidadeRegistros++;
+
+    if (quantidadeRegistros >= 25) {
+
+        arquivoCSV.flush();
+
+        quantidadeRegistros = 0;
     }
 
     return true;
@@ -92,7 +105,12 @@ void finalizarArmazenamento() {
         arquivoCSV.close();
 
         arquivoAberto = false;
+        quantidadeRegistros = 0;
 
         Serial.println("Arquivo CSV finalizado!");
     }
+}       
+
+bool gravacaoEmAndamento() {
+    return arquivoAberto;
 }
