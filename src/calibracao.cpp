@@ -10,28 +10,28 @@ Calibracao calibrarSistema(int numeroAmostras, int intervaloMs) {
     double somaAltitude = 0.0;
     double somaPressao = 0.0;
 
-    double somaGx = 0.0;
-    double somaGy = 0.0;
-    double somaGz = 0.0;
+    // double somaGx = 0.0;
+    // double somaGy = 0.0;
+    // double somaGz = 0.0;
 
     for (int i = 0; i < numeroAmostras; i++) {
         DadoSensor dado = lerSensores();
 
-        Serial.print("Calibracao ");
-        Serial.print(i);
-        Serial.print(" | Gx: ");
-        Serial.print(dado.gx, 5);
-        Serial.print(" | Gy: ");
-        Serial.print(dado.gy, 5);
-        Serial.print(" | Gz: ");
-        Serial.println(dado.gz, 5);
+        // Serial.print("Calibracao ");
+        // Serial.print(i);
+        // Serial.print(" | Gx: ");
+        // Serial.print(dado.gx, 5);
+        // Serial.print(" | Gy: ");
+        // Serial.print(dado.gy, 5);
+        // Serial.print(" | Gz: ");
+        // Serial.println(dado.gz, 5);
 
         somaAltitude += dado.altitude_m;
         somaPressao += dado.pressao_pa;
 
-        somaGx += dado.gx;
-        somaGy += dado.gy;
-        somaGz += dado.gz;
+        // somaGx += dado.gx;
+        // somaGy += dado.gy;
+        // somaGz += dado.gz;
 
         delay(intervaloMs);
     }
@@ -39,9 +39,9 @@ Calibracao calibrarSistema(int numeroAmostras, int intervaloMs) {
     calibracao.altitudeInicial_m = somaAltitude / numeroAmostras;
     calibracao.pressaoInicial_pa = somaPressao / numeroAmostras;
     
-    calibracao.giroBiasX = somaGx / numeroAmostras;
-    calibracao.giroBiasY = somaGy / numeroAmostras;
-    calibracao.giroBiasZ = somaGz / numeroAmostras;
+    // calibracao.giroBiasX = somaGx / numeroAmostras;
+    // calibracao.giroBiasY = somaGy / numeroAmostras;
+    // calibracao.giroBiasZ = somaGz / numeroAmostras;
 
     return calibracao;
 };
@@ -53,17 +53,17 @@ DadoTratado aplicarCalibracao(const DadoSensor& dado,const Calibracao& calibraca
 
     tratado.altitude_relativa_m = dado.altitude_m - calibracao.altitudeInicial_m;
 
-    tratado.ax = dado.ax - BIAS_ACCEL_X;
-    tratado.ay = dado.ay;
-    tratado.az = dado.az;
+    // tratado.ax = dado.ax - BIAS_ACCEL_X;
+    // tratado.ay = dado.ay;
+    // tratado.az = dado.az;
 
-    tratado.gx_corrigido = dado.gx - calibracao.giroBiasX;
-    tratado.gy_corrigido = dado.gy - calibracao.giroBiasY;
-    tratado.gz_corrigido = dado.gz - calibracao.giroBiasZ;
+    // tratado.gx_corrigido = dado.gx - calibracao.giroBiasX;
+    // tratado.gy_corrigido = dado.gy - calibracao.giroBiasY;
+    // tratado.gz_corrigido = dado.gz - calibracao.giroBiasZ;
 
-    tratado.mx = dado.mx;
-    tratado.my = dado.my;
-    tratado.mz = dado.mz;
+    // tratado.mx = dado.mx;
+    // tratado.my = dado.my;
+    // tratado.mz = dado.mz;
 
     return tratado;
 }

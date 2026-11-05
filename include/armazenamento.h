@@ -10,6 +10,10 @@ bool criarArquivoCSV(
     const char* cabecalho
 );
 
+bool criarArquivoNovoVoo(const char* cabecalho);
+
+bool confirmarLancamentoArmazenamento();
+
 bool registrarDado(const String& linha);
 
 void finalizarArmazenamento();
