@@ -1,47 +1,51 @@
 #include "armazenamento.h"
 
 #include <LittleFS.h>
-#include <string.h>
 
 namespace {
 
-File arquivoCSV;
+// ========================================================
+// BUFFER DE AMOSTRAS EM RAM
+// ========================================================
+
+AmostraVoo amostras[CAPACIDADE_TOTAL];
+
+size_t indicePreLancamento = 0;
+size_t quantidadePreLancamento = 0;
+size_t quantidadePosLancamento = 0;
+
+// ========================================================
+// CONTROLE DO ARMAZENAMENTO
+// ========================================================
 
 bool armazenamentoIniciado = false;
-bool arquivoAberto = false;
-bool experimentoTemporario = false;
+bool coletaEmAndamento = false;
 bool lancamentoConfirmado = false;
+bool arquivoSalvo = false;
 
-unsigned int quantidadeRegistros = 0;
+String cabecalhoCSV;
 
-const char* CAMINHO_TEMPORARIO =
-    "/experimento_temporario.csv";
+const char* CAMINHO_CSV = "/ultimo_lancamento.csv";
+const char* CAMINHO_TEMPORARIO = "/experimento_temporario.csv";
 
-const char* CAMINHO_ULTIMO =
-    "/ultimo_lancamento.csv";
+// ========================================================
+// ESCRITA DE UMA AMOSTRA NO CSV
+// ========================================================
 
-const char* CAMINHO_PENULTIMO =
-    "/penultimo_lancamento.csv";
-
-// Reabre um arquivo preservando o conteudo existente.
-bool reabrirParaContinuar(const char* caminho) {
-
-    if (!LittleFS.exists(caminho)) {
-        Serial.println("Arquivo nao encontrado para continuar gravacao!");
-        return false;
-    }
-
-    arquivoCSV = LittleFS.open(caminho, "a");
-
-    arquivoAberto = static_cast<bool>(arquivoCSV);
-    quantidadeRegistros = 0;
-
-    if (!arquivoAberto) {
-        Serial.println("Falha ao reabrir arquivo CSV!");
-        return false;
-    }
-
-    return true;
+bool escreverAmostra(File& arquivo, const AmostraVoo& amostra)
+{
+    // Interrompe a escrita se algum campo nao puder ser escrito.
+    return
+        arquivo.print(amostra.timestamp_ms) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.pressao_pa, 2) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.temperatura_c, 2) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.altitude_relativa_bruta_m, 3) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.altitude_relativa_filtrada_m, 3) > 0 &&
+        arquivo.println() == 2;
 }
 
 }
@@ -50,249 +54,203 @@ bool reabrirParaContinuar(const char* caminho) {
 // INICIALIZACAO DO LITTLEFS
 // ========================================================
 
-bool iniciarArmazenamento() {
-
-    if (armazenamentoIniciado) {
+bool iniciarArmazenamento()
+{
+    if (armazenamentoIniciado)
+    {
         return true;
     }
 
     armazenamentoIniciado = LittleFS.begin(false);
 
-    if (!armazenamentoIniciado) {
+    if (!armazenamentoIniciado)
+    {
         Serial.println("Falha ao inicializar LittleFS!");
-        return false;
     }
 
-    Serial.println("LittleFS inicializado!");
-
-    return true;
+    return armazenamentoIniciado;
 }
 
 // ========================================================
-// CRIACAO DO ARQUIVO CSV
+// PREPARACAO DO REGISTRO EM MEMORIA
 // ========================================================
 
-bool criarArquivoCSV(
-    const char* caminho,
-    const char* cabecalho
-) {
-
-    if (!armazenamentoIniciado || arquivoAberto) {
+bool criarArquivoNovoVoo(const char* cabecalho)
+{
+    if (!armazenamentoIniciado ||
+        coletaEmAndamento ||
+        cabecalho == nullptr ||
+        cabecalho[0] == '\0')
+    {
         return false;
     }
 
-    if (caminho == nullptr || cabecalho == nullptr) {
+    // Evita descartar um voo que ainda nao foi salvo.
+    if (lancamentoConfirmado && !arquivoSalvo)
+    {
         return false;
     }
 
-    // Evita sobrescrever um arquivo existente.
-    if (LittleFS.exists(caminho)) {
-        Serial.println("O arquivo CSV ja existe!");
+    cabecalhoCSV = cabecalho;
+
+    if (cabecalhoCSV != cabecalho)
+    {
         return false;
     }
 
-    arquivoCSV = LittleFS.open(caminho, "w");
+    indicePreLancamento = 0;
+    quantidadePreLancamento = 0;
+    quantidadePosLancamento = 0;
 
-    if (!arquivoCSV) {
-        Serial.println("Falha ao criar arquivo CSV!");
-        return false;
-    }
-
-    // println acrescenta os caracteres de fim de linha: \r\n.
-    size_t tamanhoEsperado = strlen(cabecalho) + 2;
-
-    if (arquivoCSV.println(cabecalho) != tamanhoEsperado) {
-        arquivoCSV.close();
-
-        if (!LittleFS.remove(caminho)) {
-            Serial.println("Falha ao remover arquivo incompleto!");
-        }
-
-        Serial.println("Falha ao escrever cabecalho CSV!");
-        return false;
-    }
-
-    arquivoCSV.flush();
-
-    quantidadeRegistros = 0;
-    arquivoAberto = true;
-    experimentoTemporario = false;
     lancamentoConfirmado = false;
+    arquivoSalvo = false;
+    coletaEmAndamento = true;
 
-    Serial.print("Arquivo CSV criado: ");
-    Serial.println(caminho);
-
-    return true;
-}
-
-// ========================================================
-// CRIACAO DO EXPERIMENTO TEMPORARIO
-// ========================================================
-
-bool criarArquivoNovoVoo(const char* cabecalho) {
-
-    if (!armazenamentoIniciado || arquivoAberto) {
-        return false;
-    }
-
-    if (cabecalho == nullptr) {
-        return false;
-    }
-
-    // Descarta somente o temporario da inicializacao anterior.
-    // Os dois lancamentos confirmados permanecem preservados.
-    if (LittleFS.exists(CAMINHO_TEMPORARIO)) {
-
-        if (!LittleFS.remove(CAMINHO_TEMPORARIO)) {
-            Serial.println("Falha ao remover experimento temporario!");
-            return false;
-        }
-    }
-
-    if (!criarArquivoCSV(CAMINHO_TEMPORARIO, cabecalho)) {
-        return false;
-    }
-
-    experimentoTemporario = true;
-
-    Serial.println("Aguardando confirmacao do lancamento.");
+    Serial.println("Buffer preparado. Aguardando lancamento.");
 
     return true;
 }
 
 // ========================================================
-// CONFIRMACAO DO LANCAMENTO E ROTACAO DOS ARQUIVOS
+// CONFIRMACAO DO LANCAMENTO
 // ========================================================
 
-bool confirmarLancamentoArmazenamento() {
-
-    if (!armazenamentoIniciado) {
+bool confirmarLancamentoArmazenamento()
+{
+    if (!coletaEmAndamento)
+    {
         return false;
     }
 
-    // Evita repetir a rotacao para o mesmo lancamento.
-    if (lancamentoConfirmado) {
-        return arquivoAberto;
-    }
-
-    if (!arquivoAberto || !experimentoTemporario) {
-        return false;
-    }
-
-    // Sincroniza e fecha antes de renomear.
-    finalizarArmazenamento();
-
-    bool ultimoMovido = false;
-
-    if (LittleFS.exists(CAMINHO_ULTIMO)) {
-
-        // Libera o nome do penultimo lancamento.
-        if (LittleFS.exists(CAMINHO_PENULTIMO)) {
-
-            if (!LittleFS.remove(CAMINHO_PENULTIMO)) {
-                Serial.println("Falha ao remover penultimo lancamento!");
-
-                reabrirParaContinuar(CAMINHO_TEMPORARIO);
-                return false;
-            }
-        }
-
-        // O antigo ultimo passa a ser o penultimo.
-        if (!LittleFS.rename(
-                CAMINHO_ULTIMO,
-                CAMINHO_PENULTIMO)) {
-
-            Serial.println("Falha ao renomear ultimo lancamento!");
-
-            reabrirParaContinuar(CAMINHO_TEMPORARIO);
-            return false;
-        }
-
-        ultimoMovido = true;
-    }
-
-    // O experimento atual passa a ser o ultimo lancamento.
-    if (!LittleFS.rename(
-            CAMINHO_TEMPORARIO,
-            CAMINHO_ULTIMO)) {
-
-        Serial.println("Falha ao promover experimento temporario!");
-
-        // Tenta devolver o ultimo lancamento ao nome anterior.
-        if (ultimoMovido) {
-
-            if (!LittleFS.rename(
-                    CAMINHO_PENULTIMO,
-                    CAMINHO_ULTIMO)) {
-
-                Serial.println("Falha ao restaurar nome do ultimo lancamento!");
-            }
-        }
-
-        reabrirParaContinuar(CAMINHO_TEMPORARIO);
-        return false;
-    }
-
-    experimentoTemporario = false;
+    // Preserva o buffer anterior e passa a registrar depois dele.
     lancamentoConfirmado = true;
 
-    // Continua escrevendo depois das amostras ja registradas.
-    if (!reabrirParaContinuar(CAMINHO_ULTIMO)) {
+    return true;
+}
+
+// ========================================================
+// REGISTRO DE DADOS EM MEMORIA
+// ========================================================
+
+bool registrarAmostra(const AmostraVoo& amostra)
+{
+    if (!coletaEmAndamento)
+    {
         return false;
     }
 
-    Serial.println("Lancamento confirmado no armazenamento.");
+    if (!lancamentoConfirmado)
+    {
+        // Antes do lancamento, sobrescreve a amostra mais antiga.
+        amostras[indicePreLancamento] = amostra;
+
+        indicePreLancamento =
+            (indicePreLancamento + 1) % CAPACIDADE_PRE_LANCAMENTO;
+
+        if (quantidadePreLancamento < CAPACIDADE_PRE_LANCAMENTO)
+        {
+            quantidadePreLancamento++;
+        }
+    }
+    else
+    {
+        // Depois do lancamento, nao sobrescreve dados.
+        size_t indice =
+            CAPACIDADE_PRE_LANCAMENTO + quantidadePosLancamento;
+
+        if (indice >= CAPACIDADE_TOTAL)
+        {
+            return false;
+        }
+
+        amostras[indice] = amostra;
+        quantidadePosLancamento++;
+    }
 
     return true;
 }
 
 // ========================================================
-// REGISTRO DE DADOS
+// FINALIZACAO DA COLETA E GERACAO DO CSV
 // ========================================================
 
-bool registrarDado(const String& linha) {
+bool finalizarArmazenamento()
+{
+    coletaEmAndamento = false;
 
-    if (!arquivoAberto) {
+    if (arquivoSalvo)
+    {
+        return true;
+    }
+
+    if (!armazenamentoIniciado ||
+        !lancamentoConfirmado ||
+        quantidadePosLancamento == 0)
+    {
         return false;
     }
 
-    size_t tamanhoEsperado = linha.length() + 2;
+    // O CSV anterior permanece enquanto o novo e escrito.
+    File arquivo = LittleFS.open(CAMINHO_TEMPORARIO, "w");
 
-    if (arquivoCSV.println(linha) != tamanhoEsperado) {
-        Serial.println("Falha ao escrever no arquivo CSV!");
+    if (!arquivo)
+    {
+        Serial.println("Falha ao criar CSV!");
         return false;
     }
 
-    quantidadeRegistros++;
+    bool sucesso =
+        arquivo.println(cabecalhoCSV) == cabecalhoCSV.length() + 2;
 
-    if (quantidadeRegistros >= 25) {
+    // Localiza a amostra mais antiga do buffer circular.
+    size_t inicio = 0;
 
-        arquivoCSV.flush();
-
-        quantidadeRegistros = 0;
+    if (quantidadePreLancamento == CAPACIDADE_PRE_LANCAMENTO)
+    {
+        inicio = indicePreLancamento;
     }
+
+    // Escreve o pre-lancamento em ordem cronologica.
+    for (size_t i = 0; i < quantidadePreLancamento && sucesso; i++)
+    {
+        size_t indice =
+            (inicio + i) % CAPACIDADE_PRE_LANCAMENTO;
+
+        sucesso = escreverAmostra(arquivo, amostras[indice]);
+    }
+
+    // Escreve a amostra da deteccao e as posteriores.
+    for (size_t i = 0; i < quantidadePosLancamento && sucesso; i++)
+    {
+        size_t indice = CAPACIDADE_PRE_LANCAMENTO + i;
+
+        sucesso = escreverAmostra(arquivo, amostras[indice]);
+    }
+
+    arquivo.flush();
+    arquivo.close();
+
+    if (!sucesso)
+    {
+        Serial.println("Falha ao escrever CSV! Dados continuam na RAM.");
+        return false;
+    }
+
+    // Substitui o CSV anterior pelo novo.
+    if (!LittleFS.rename(CAMINHO_TEMPORARIO, CAMINHO_CSV))
+    {
+        Serial.println("Falha ao substituir CSV anterior!");
+        return false;
+    }
+
+    arquivoSalvo = true;
+
+    Serial.println("CSV salvo: /ultimo_lancamento.csv");
 
     return true;
 }
 
-// ========================================================
-// FINALIZACAO DO ARQUIVO
-// ========================================================
-
-void finalizarArmazenamento() {
-
-    if (arquivoAberto) {
-
-        arquivoCSV.flush();
-        arquivoCSV.close();
-
-        arquivoAberto = false;
-        quantidadeRegistros = 0;
-
-        Serial.println("Arquivo CSV finalizado!");
-    }
-}
-
-bool gravacaoEmAndamento() {
-    return arquivoAberto;
+bool gravacaoEmAndamento()
+{
+    return coletaEmAndamento;
 }

@@ -1,5 +1,5 @@
-#ifndef WIFI_H
-#define WIFI_H
+#ifndef REDE_WIFI_H
+#define REDE_WIFI_H
 
 void atualizarWiFi();
 bool iniciarWiFi();

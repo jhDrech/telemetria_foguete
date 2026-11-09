@@ -1,4 +1,4 @@
-#include "wifi.h"
+#include "rede_wifi.h"
 #include <WiFi.h>
 #include <Arduino.h>
 #include <WebServer.h>
@@ -39,6 +39,9 @@ bool iniciarWiFi()
                       "<body>"
                       "<h1>Telemetria do foguete</h1>"
                       "<p>Conexao com o ESP32 funcionando.</p>"
+                      "<p><a href='/download/ultimo'>"
+                      "Baixar CSV do ultimo lancamento"
+                      "</a></p>"
                       "</body>"
                       "</html>"); });
 

@@ -11,7 +11,7 @@
 #include "detector_lancamento.h"
 #include "filtro_kalman.h"
 #include "armazenamento.h"
-#include "wifi.h"
+#include "rede_wifi.h"
 
 // Momento em que o experimento realmente começa.
 // Assim o timestamp do CSV começa próximo de zero,
@@ -33,10 +33,8 @@ enum class EstadoGravacao
 };
 
 static EstadoGravacao estadoGravacao = EstadoGravacao::AGUARDANDO;
-static const uint32_t TEMPO_REGISTRO_APOS_LANCAMENTO_MS = 40000;
 static uint32_t instanteLancamentoMs = 0;
 static bool contagemRegistroIniciada = false;
-
 static const int ANGULO_INICIAL = 180;
 static const int ANGULO_ACIONAMENTO = 60;
 static EstadoParaquedas ultimoEstado = EstadoParaquedas::AGUARDANDO;
@@ -132,19 +130,17 @@ void setup()
     // }
 
     // ========================================================
-    // CRIACAO DO EXPERIMENTO TEMPORARIO
+    // PREPARACAO DO BUFFER EM MEMORIA
     // ========================================================
 
     if (!criarArquivoNovoVoo(CABECALHO_CSV))
     {
-        Serial.println("Erro ao criar experimento temporario!");
-
+        Serial.println("Erro ao preparar buffer em memoria!");
         while (true)
         {
             delay(1000);
         }
     }
-
 
     estadoGravacao = EstadoGravacao::GRAVANDO;
 
@@ -240,7 +236,7 @@ void loop()
         if (!confirmarLancamentoArmazenamento())
         {
             Serial.println(
-                "Erro ao organizar arquivos do lancamento!");
+                "Erro ao confirmar lancamento no armazenamento!");
 
             if (!gravacaoEmAndamento())
             {
@@ -351,30 +347,55 @@ void loop()
     // linhaCSV += String(static_cast<int>(controleParaquedas.estado));
 
     Serial.println(linhaCSV);
-
     if (estadoGravacao == EstadoGravacao::GRAVANDO)
     {
-        if (!registrarDado(linhaCSV))
-        {
-            Serial.println("Erro ao registrar dado no armazenamento!");
+        // Monta a amostra que sera guardada no array.
+        AmostraVoo amostra;
 
-            finalizarArmazenamento();
-            estadoGravacao = EstadoGravacao::FINALIZADA;
+        amostra.timestamp_ms = timestampMs;
+        amostra.pressao_pa = dado.pressao_pa;
+        amostra.temperatura_c = dado.temperatura_c;
+        amostra.altitude_relativa_bruta_m = dado.altitude_relativa_m;
+        amostra.altitude_relativa_filtrada_m =
+            altitudeValida ? filtroAltitude.estimativa : NAN;
 
-            Serial.println("Gravacao interrompida por falha de escrita.");
-        }
+        bool amostraRegistrada = registrarAmostra(amostra);
 
-        if (estadoGravacao == EstadoGravacao::GRAVANDO &&
+        bool tempoEncerrado =
             contagemRegistroIniciada &&
-            millis() - instanteLancamentoMs >= TEMPO_REGISTRO_APOS_LANCAMENTO_MS)
+            millis() - instanteLancamentoMs >= TEMPO_POS_LANCAMENTO_MS;
+
+        if (!amostraRegistrada || tempoEncerrado)
         {
-            finalizarArmazenamento();
             estadoGravacao = EstadoGravacao::FINALIZADA;
 
-            Serial.println("Gravacao encerrada.");
+            if (!amostraRegistrada)
+            {
+                Serial.println("Coleta interrompida: falha ao guardar amostra.");
+            }
+            else
+            {
+                Serial.println("Tempo de coleta encerrado.");
+            }
+
+            if (finalizarArmazenamento())
+            {
+                Serial.println("CSV salvo e disponivel para download.");
+            }
+            else
+            {
+                Serial.println("CSV nao foi salvo. Dados permanecem na RAM.");
+            }
         }
     }
 
+    // Atende o navegador antes do lancamento e apos a coleta.
+    if (!contagemRegistroIniciada ||
+        estadoGravacao == EstadoGravacao::FINALIZADA)
+    {
+        atualizarWiFi();
+    }
+
     // Aproximadamente 50 Hz.
-    delay(20);
+    delay(INTERVALO_AMOSTRAGEM_MS);
 };
