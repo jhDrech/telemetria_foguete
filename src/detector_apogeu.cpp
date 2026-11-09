@@ -1,7 +1,8 @@
 
 #include "detector_apogeu.h"
 
-DetectorApogeu inicializarDetectorApogeu() {
+DetectorApogeu inicializarDetectorApogeu()
+{
     DetectorApogeu detector;
 
     detector.altitudeAtual_m = 0.0f;
@@ -18,17 +19,19 @@ DetectorApogeu inicializarDetectorApogeu() {
 }
 
 void atualizarDetectorApogeu(
-    DetectorApogeu& detector,
-    float altitudeMedida_m
-) {
+    DetectorApogeu &detector,
+    float altitudeMedida_m)
+{
     const float tolerancia_m = 0.3f;
 
-    if(detector.apogeuDetectado){
+    if (detector.apogeuDetectado)
+    {
         return;
     }
 
     // A primeira medição estabelece a referência inicial.
-    if (!detector.primeiraLeituraRecebida) {
+    if (!detector.primeiraLeituraRecebida)
+    {
         detector.altitudeAtual_m = altitudeMedida_m;
         detector.altitudeAnterior_m = altitudeMedida_m;
         detector.maiorAltitude_m = altitudeMedida_m;
@@ -46,32 +49,30 @@ void atualizarDetectorApogeu(
         detector.altitudeAtual_m - detector.altitudeAnterior_m;
 
     // Guarda a maior altitude registrada.
-    if (detector.altitudeAtual_m > detector.maiorAltitude_m) {
+    if (detector.altitudeAtual_m > detector.maiorAltitude_m)
+    {
         detector.maiorAltitude_m = detector.altitudeAtual_m;
     }
 
-    // Verifica se houve queda significativa.
-    if (diferencaAltitude_m < -tolerancia_m) {
+    // Verifica a queda acumulada em relacao a maior altitude.
+    float quedaDesdeMaximo_m =
+        detector.maiorAltitude_m - detector.altitudeAtual_m;
+
+    if (quedaDesdeMaximo_m > tolerancia_m)
+    {
         detector.leiturasEmQueda++;
-        detector.leiturasSemQuedaSignificativa = 0;
     }
-    else if (diferencaAltitude_m > tolerancia_m) {
+    else
+    {
         detector.leiturasEmQueda = 0;
-        detector.leiturasSemQuedaSignificativa = 0;
-    }
-    else {
-        detector.leiturasSemQuedaSignificativa++;
-
-        if (detector.leiturasSemQuedaSignificativa >= 3) {
-            detector.leiturasEmQueda = 0;
-            detector.leiturasSemQuedaSignificativa = 0;
-        }
     }
 
-    // Confirma o apogeu após cinco leituras consecutivas de queda.
+    // Confirma apos cinco leituras abaixo do maximo,
+    // com queda acumulada maior que a tolerancia.
     if (detector.leiturasEmQueda >= 5 &&
-        !detector.apogeuDetectado && 
-        detector.maiorAltitude_m >= ALTITUDE_MINIMA_PARA_APOGEU) {
+        !detector.apogeuDetectado &&
+        detector.maiorAltitude_m >= ALTITUDE_MINIMA_PARA_APOGEU)
+    {
 
         detector.apogeuDetectado = true;
     }

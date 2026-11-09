@@ -70,6 +70,18 @@ void setup()
 
     calibracao = calibrarSistema(100, 10);
 
+        // Verifica a referencia antes de preparar o experimento.
+    if (!isfinite(calibracao.pressaoInicial_pa) ||
+        calibracao.pressaoInicial_pa <= 0.0f)
+    {
+        Serial.println("Falha na calibracao. Reinicie com o sensor conectado.");
+
+        while (true)
+        {
+            delay(1000);
+        }
+    }
+
     // ========================================================
     // INICIALIZACAO DA ORIENTACAO / DMP
     // ========================================================
@@ -160,7 +172,7 @@ void setup()
 
 void loop()
 {
-
+    uint32_t inicioCicloMs = millis();
     // ========================================================
     // LEITURA DOS SENSORES
     // ========================================================
@@ -396,6 +408,11 @@ void loop()
         atualizarWiFi();
     }
 
-    // Aproximadamente 50 Hz.
-    delay(INTERVALO_AMOSTRAGEM_MS);
+    // Aguarda somente o tempo restante para completar o intervalo.
+    uint32_t duracaoCicloMs = millis() - inicioCicloMs;
+
+    if (duracaoCicloMs < INTERVALO_AMOSTRAGEM_MS)
+    {
+        delay(INTERVALO_AMOSTRAGEM_MS - duracaoCicloMs);
+    }
 };

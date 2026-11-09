@@ -18,8 +18,8 @@ void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento,
     if (detectorLancamento.lancamentoDetectado) {
         return;
     }
-    if (aceleracao_vertical_valida &&
-        aceleracao_vertical > LIMITE_ACELERACAO_LANCAMENTO) {
+        if (aceleracao_vertical_valida &&
+        aceleracao_vertical > ALTITUDE_MINIMA_LANCAMENTO_M) {
 
         detectorLancamento.leiturasAcimaDoLimite++;
     }

@@ -42,3 +42,4 @@ Começar pelos testes simulados do detector de lançamento e do detector de apog
 - Comparar altitude relativa bruta e altitude filtrada no CSV.
 - Ajustar os parâmetros com base nos resultados experimentais.
 - Verificar se o filtro responde adequadamente às mudanças de altitude sem suavizar excessivamente os dados.
+

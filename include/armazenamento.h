@@ -43,6 +43,14 @@ struct AmostraVoo
 // FUNCOES DO ARMAZENAMENTO
 // ========================================================
 
+enum class EstadoArmazenamento
+{
+    AGUARDANDO,
+    COLETANDO,
+    FINALIZADO,
+    ERRO_AO_SALVAR
+};
+
 bool iniciarArmazenamento();
 
 // Prepara o array sem criar arquivos.
@@ -56,5 +64,9 @@ bool registrarAmostra(const AmostraVoo& amostra);
 bool finalizarArmazenamento();
 
 bool gravacaoEmAndamento();
+
+EstadoArmazenamento obterEstadoArmazenamento();
+
+bool tentarSalvarNovamente();
 
 #endif

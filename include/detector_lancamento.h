@@ -7,7 +7,7 @@ struct DetectorLancamento {
     bool lancamentoDetectado;
 };
 
-constexpr float LIMITE_ACELERACAO_LANCAMENTO = 15.0f; // m/s²
+constexpr float ALTITUDE_MINIMA_LANCAMENTO_M = 5.0f; // metros
 constexpr int LEITURAS_PARA_DETECTAR_LANCAMENTO = 3;
 
 DetectorLancamento inicializarDetectorLancamento();

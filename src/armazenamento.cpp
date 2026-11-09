@@ -2,51 +2,53 @@
 
 #include <LittleFS.h>
 
-namespace {
-
-// ========================================================
-// BUFFER DE AMOSTRAS EM RAM
-// ========================================================
-
-AmostraVoo amostras[CAPACIDADE_TOTAL];
-
-size_t indicePreLancamento = 0;
-size_t quantidadePreLancamento = 0;
-size_t quantidadePosLancamento = 0;
-
-// ========================================================
-// CONTROLE DO ARMAZENAMENTO
-// ========================================================
-
-bool armazenamentoIniciado = false;
-bool coletaEmAndamento = false;
-bool lancamentoConfirmado = false;
-bool arquivoSalvo = false;
-
-String cabecalhoCSV;
-
-const char* CAMINHO_CSV = "/ultimo_lancamento.csv";
-const char* CAMINHO_TEMPORARIO = "/experimento_temporario.csv";
-
-// ========================================================
-// ESCRITA DE UMA AMOSTRA NO CSV
-// ========================================================
-
-bool escreverAmostra(File& arquivo, const AmostraVoo& amostra)
+namespace
 {
-    // Interrompe a escrita se algum campo nao puder ser escrito.
-    return
-        arquivo.print(amostra.timestamp_ms) > 0 &&
-        arquivo.print(",") > 0 &&
-        arquivo.print(amostra.pressao_pa, 2) > 0 &&
-        arquivo.print(",") > 0 &&
-        arquivo.print(amostra.temperatura_c, 2) > 0 &&
-        arquivo.print(",") > 0 &&
-        arquivo.print(amostra.altitude_relativa_bruta_m, 3) > 0 &&
-        arquivo.print(",") > 0 &&
-        arquivo.print(amostra.altitude_relativa_filtrada_m, 3) > 0 &&
-        arquivo.println() == 2;
-}
+
+    // ========================================================
+    // BUFFER DE AMOSTRAS EM RAM
+    // ========================================================
+
+    AmostraVoo amostras[CAPACIDADE_TOTAL];
+
+    size_t indicePreLancamento = 0;
+    size_t quantidadePreLancamento = 0;
+    size_t quantidadePosLancamento = 0;
+
+    // ========================================================
+    // CONTROLE DO ARMAZENAMENTO
+    // ========================================================
+
+    bool armazenamentoIniciado = false;
+    bool coletaEmAndamento = false;
+    bool lancamentoConfirmado = false;
+    EstadoArmazenamento estadoArmazenamento =
+        EstadoArmazenamento::AGUARDANDO;
+    bool arquivoSalvo = false;
+
+    String cabecalhoCSV;
+
+    const char *CAMINHO_CSV = "/ultimo_lancamento.csv";
+    const char *CAMINHO_TEMPORARIO = "/experimento_temporario.csv";
+
+    // ========================================================
+    // ESCRITA DE UMA AMOSTRA NO CSV
+    // ========================================================
+
+    bool escreverAmostra(File &arquivo, const AmostraVoo &amostra)
+    {
+        // Interrompe a escrita se algum campo nao puder ser escrito.
+        return arquivo.print(amostra.timestamp_ms) > 0 &&
+               arquivo.print(",") > 0 &&
+               arquivo.print(amostra.pressao_pa, 2) > 0 &&
+               arquivo.print(",") > 0 &&
+               arquivo.print(amostra.temperatura_c, 2) > 0 &&
+               arquivo.print(",") > 0 &&
+               arquivo.print(amostra.altitude_relativa_bruta_m, 3) > 0 &&
+               arquivo.print(",") > 0 &&
+               arquivo.print(amostra.altitude_relativa_filtrada_m, 3) > 0 &&
+               arquivo.println() == 2;
+    }
 
 }
 
@@ -75,7 +77,7 @@ bool iniciarArmazenamento()
 // PREPARACAO DO REGISTRO EM MEMORIA
 // ========================================================
 
-bool criarArquivoNovoVoo(const char* cabecalho)
+bool criarArquivoNovoVoo(const char *cabecalho)
 {
     if (!armazenamentoIniciado ||
         coletaEmAndamento ||
@@ -106,6 +108,8 @@ bool criarArquivoNovoVoo(const char* cabecalho)
     arquivoSalvo = false;
     coletaEmAndamento = true;
 
+    estadoArmazenamento = EstadoArmazenamento::COLETANDO;
+
     Serial.println("Buffer preparado. Aguardando lancamento.");
 
     return true;
@@ -132,7 +136,7 @@ bool confirmarLancamentoArmazenamento()
 // REGISTRO DE DADOS EM MEMORIA
 // ========================================================
 
-bool registrarAmostra(const AmostraVoo& amostra)
+bool registrarAmostra(const AmostraVoo &amostra)
 {
     if (!coletaEmAndamento)
     {
@@ -190,6 +194,9 @@ bool finalizarArmazenamento()
         return false;
     }
 
+    // Se alguma etapa abaixo falhar, permanece neste estado.
+    estadoArmazenamento = EstadoArmazenamento::ERRO_AO_SALVAR;
+
     // O CSV anterior permanece enquanto o novo e escrito.
     File arquivo = LittleFS.open(CAMINHO_TEMPORARIO, "w");
 
@@ -245,6 +252,8 @@ bool finalizarArmazenamento()
 
     arquivoSalvo = true;
 
+    estadoArmazenamento = EstadoArmazenamento::FINALIZADO;
+
     Serial.println("CSV salvo: /ultimo_lancamento.csv");
 
     return true;
@@ -253,4 +262,25 @@ bool finalizarArmazenamento()
 bool gravacaoEmAndamento()
 {
     return coletaEmAndamento;
+}
+
+// ========================================================
+// CONSULTA DO ESTADO E NOVA TENTATIVA DE SALVAMENTO
+// ========================================================
+
+EstadoArmazenamento obterEstadoArmazenamento()
+{
+    return estadoArmazenamento;
+}
+
+bool tentarSalvarNovamente()
+{
+    if (estadoArmazenamento != EstadoArmazenamento::ERRO_AO_SALVAR)
+    {
+        return false;
+    }
+
+    // Usa as mesmas amostras que continuam no array.
+    // Nao reinicia a coleta.
+    return finalizarArmazenamento();
 }
