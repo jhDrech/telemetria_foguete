@@ -5,7 +5,7 @@
 #include <LittleFS.h>
 
 const char *NOME_REDE = "FOGUETE_ESP32";
-const char *SENHA = "12345478";
+const char *SENHA = "SerjãoDosFoguetes";
 
 static WebServer servidor(80);
 static bool servidorIniciado = false;
@@ -26,24 +26,33 @@ bool iniciarWiFi()
 
     servidor.on("/", HTTP_GET, []()
                 { servidor.send(
-                      200,
-                      "text/html; charset=utf-8",
-                      "<!DOCTYPE html>"
-                      "<html lang='pt-BR'>"
-                      "<head>"
-                      "<meta charset='utf-8'>"
-                      "<meta name='viewport' "
-                      "content='width=device-width, initial-scale=1'>"
-                      "<title>Telemetria do foguete</title>"
-                      "</head>"
-                      "<body>"
-                      "<h1>Telemetria do foguete</h1>"
-                      "<p>Conexao com o ESP32 funcionando.</p>"
-                      "<p><a href='/download/ultimo'>"
-                      "Baixar CSV do ultimo lancamento"
-                      "</a></p>"
-                      "</body>"
-                      "</html>"); });
+                        200,
+                        "text/html; charset=utf-8",
+                        "<!DOCTYPE html>"
+                        "<html lang='pt-BR'>"
+                        "<head>"
+                        "<meta charset='utf-8'>"
+                        "<meta name='viewport' "
+                        "content='width=device-width, initial-scale=1'>"
+                        "<title>Telemetria do foguete</title>"
+                        "</head>"
+                        "<body>"
+                        "<h1>Telemetria do foguete</h1>"
+                        "<p>Conexao com o ESP32 funcionando.</p>"
+                        "<p><a href='/download/ultimo'>"
+                        "Baixar CSV do ultimo lancamento"
+                        "</a></p>"
+                        "</body>"
+                        "</html>"); });
+
+    //     servidor.on("/", HTTP_GET, []()
+    // {
+    //     servidor.send(
+    //         200,
+    //         "text/html; charset=utf-8",
+    //         "<html><body><h1>Oi</h1></body></html>"
+    //     );
+    // });
 
     // ========================================================
     // DOWNLOAD DO ULTIMO LANCAMENTO
