@@ -3,7 +3,7 @@
 
 bool iniciarSensores();
 struct DadoSensor{
-    uint32_t timestamp_ms = 0;
+    uint32_t timestamp_ms;
     
     float pressao = NAN;
     float temp = NAN;
@@ -40,5 +40,5 @@ struct DadoEstimado{
     float velocidade_vertical = NAN;
 };
 
-bool atualizarPressaoInicial(float& pressaoInicial);
-float obterAlturaRelativa(float pressaoInicial, float pressaoAtual);
+bool atualizarPressaoInicial(float& pressaoAtual);
+float obterALturaRelativa(float pressaoInicial, float pressaoAtual);
