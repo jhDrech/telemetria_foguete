@@ -3,6 +3,7 @@
 #include <Adafruit_BMP280.h>
 #include <ICM_20948.h>
 #include "sensores.h"
+#include <math.h>
 
 ICM_20948_I2C icm;
 Adafruit_BMP280 bmp;
@@ -17,34 +18,60 @@ constexpr uint8_t ENDERECO_BMP = 0x77;
 constexpr float CONVERCAO_ACCEL = (9.80665f / 1000.0f); // converte milig da accel para m/s²
 constexpr float CONVERCAO_GIRO = DEG_TO_RAD; // converte milig da accel para m/s²
 
+namespace {
+    double somaPressao = 0.0;
+    uint32_t quantidadePressao = 0;
+    uint32_t inicioPressaoMs = 0;
+    bool coletaPressaoIniciada = false;
+    bool pressaoPronta = false;
+    float referenciaPressao = NAN;
+}
 
 bool iniciarSensores(){
+    bmpDisponivel = false;
+    icmDisponivel = false;
+    somaPressao = 0.0;
+    quantidadePressao = 0;
+    coletaPressaoIniciada = false;
+    pressaoPronta = false;
+    referenciaPressao = NAN;
     Wire.begin(PIN_SDA, PIN_SCL);
     icm.begin(Wire, 0);
+    icmDisponivel = (icm.status == ICM_20948_Stat_Ok);
     
-    if(!bmp.begin(ENDERECO_BMP)){
+    // Mantem os dois enderecos aceitos pela versao NoICM do Vito.
+    if(!bmp.begin(ENDERECO_BMP) && !bmp.begin(0x76)){
         return false;
     }else{
         bmpDisponivel = true;
     }
 
-    if(icm.status != ICM_20948_Stat_Ok){
-        icmDisponivel = false;
-    }else{
-        icmDisponivel = true;
-    }
+    // Mantem a configuracao do BMP da versao NoICM.
+    bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,
+                    Adafruit_BMP280::SAMPLING_X1,
+                    Adafruit_BMP280::SAMPLING_X4,
+                    Adafruit_BMP280::FILTER_OFF,
+                    Adafruit_BMP280::STANDBY_MS_1);
     
     return true;
 }
 
 bool lerSensores(DadoSensor& dado){
+    // Nao reaproveita valores antigos quando o ICM estiver sem amostra.
+    dado = DadoSensor{};
     dado.timestamp_ms = millis();
+    if (!bmpDisponivel) {
+        return false;
+    }
     dado.temp = bmp.readTemperature();
     dado.pressao = bmp.readPressure();
     
     if(icmDisponivel == true){
         if(icm.dataReady()){
             icm.getAGMT();
+            if (icm.status != ICM_20948_Stat_Ok) {
+                return isfinite(dado.pressao) && dado.pressao > 0.0f;
+            }
         
             dado.ax = icm.accX() * CONVERCAO_ACCEL;
             dado.ay = icm.accY() * CONVERCAO_ACCEL;
@@ -60,26 +87,34 @@ bool lerSensores(DadoSensor& dado){
         }
     }
     
-    return true;
+    return isfinite(dado.pressao) && dado.pressao > 0.0f;
 };
 
 bool atualizarPressaoInicial(float& pressaoInicial){
-    static float soma_pressao = 0;
-    static int qtd_aquisicoes = 0;
-    static bool pressao_pronta = false; 
-    static uint32_t inicio = millis();
-
-    if(pressao_pronta == true){
+    if(pressaoPronta){
+        pressaoInicial = referenciaPressao;
         return true;
     }
 
-    soma_pressao += bmp.readPressure();
-    qtd_aquisicoes++;
+    if (!bmpDisponivel) {
+        return false;
+    }
+    const float pressao = bmp.readPressure();
+    if (!isfinite(pressao) || pressao <= 0.0f) {
+        return false;
+    }
+    if (!coletaPressaoIniciada) {
+        inicioPressaoMs = millis();
+        coletaPressaoIniciada = true;
+    }
+    somaPressao += pressao;
+    quantidadePressao++;
 
     // desse jeito não para o código pra esperar só o bmp
-    if(millis() - inicio >= 3000){
-        pressaoInicial = soma_pressao / qtd_aquisicoes;
-        pressao_pronta = true;
+    if(millis() - inicioPressaoMs >= 3000){
+        referenciaPressao = somaPressao / quantidadePressao;
+        pressaoInicial = referenciaPressao;
+        pressaoPronta = true;
         return true;
     }
     
@@ -87,10 +122,10 @@ bool atualizarPressaoInicial(float& pressaoInicial){
 };
 
 float obterAlturaRelativa(float pressaoInicial, float pressaoAtual){
-    float alturaRelativa;
-    if(pressaoInicial >= 0){
-        float alturaRelativa = 44330 * (1 - (pow((pressaoAtual / pressaoInicial),0.1903)));
+    if (!isfinite(pressaoInicial) || !isfinite(pressaoAtual) ||
+        pressaoInicial <= 0.0f || pressaoAtual <= 0.0f) {
+        return NAN;
     }
-    return alturaRelativa;
+    return 44330.0f * (1.0f - powf(pressaoAtual / pressaoInicial, 0.1903f));
 }
 
