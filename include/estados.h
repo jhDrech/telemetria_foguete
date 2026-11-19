@@ -1,4 +1,4 @@
-#pragma oncea
+#pragma once
 #include <Arduino.h>
 
 struct EstadosDoSistema{
