@@ -296,7 +296,7 @@ void loop()
     // CSV
     linhaCSV = String(timestampMs) + ",";
     linhaCSV += String(dado.pressao, 2) + ",";
-    linhaCSV += String(dado.temp, 2) + ",";
+    linhaCSV += String(dado.temperatura, 2) + ",";
     linhaCSV += String(estimado.altitude_relativa, 3) + ",";
     linhaCSV += String(
         altitudeValida ? filtroAltitude.estimativa : NAN,
@@ -369,7 +369,7 @@ void loop()
 
         amostra.timestamp_ms = timestampMs;
         amostra.pressao_pa = dado.pressao;
-        amostra.temperatura_c = dado.temp;
+        amostra.temperatura_c = dado.temperatura;
         amostra.altitude_relativa_bruta_m = estimado.altitude_relativa;
         amostra.altitude_relativa_filtrada_m =
             altitudeValida ? filtroAltitude.estimativa : NAN;

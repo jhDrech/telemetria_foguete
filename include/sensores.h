@@ -6,7 +6,7 @@ struct DadoSensor{
     uint32_t timestamp_ms;
     
     float pressao = NAN;
-    float temp = NAN;
+    float temperatura = NAN;
     float ax = NAN;
     float ay = NAN;
     float az = NAN;
@@ -41,4 +41,4 @@ struct DadoEstimado{
 };
 
 bool atualizarPressaoInicial(float& pressaoAtual);
-float obterALturaRelativa(float pressaoInicial, float pressaoAtual);
+float obterAlturaRelativa(float pressaoInicial, float pressaoAtual);

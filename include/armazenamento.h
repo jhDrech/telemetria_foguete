@@ -2,6 +2,7 @@
 #define ARMAZENAMENTO_H
 
 #include <Arduino.h>
+#include <sensores.h>
 
 // ========================================================
 // CONFIGURACAO DO REGISTRO EM MEMORIA
@@ -26,18 +27,6 @@ constexpr size_t CAPACIDADE_TOTAL =
     CAPACIDADE_PRE_LANCAMENTO +
     CAPACIDADE_POS_LANCAMENTO + 1;
 
-// ========================================================
-// DADOS DE CADA AMOSTRA
-// ========================================================
-
-struct AmostraVoo
-{
-    uint32_t timestamp_ms;
-    float pressao_pa;
-    float temperatura_c;
-    float altitude_relativa_bruta_m;
-    float altitude_relativa_filtrada_m;
-};
 
 // ========================================================
 // FUNCOES DO ARMAZENAMENTO
@@ -58,7 +47,7 @@ bool criarArquivoNovoVoo(const char* cabecalho);
 
 bool confirmarLancamentoArmazenamento();
 
-bool registrarAmostra(const AmostraVoo& amostra);
+bool registrarAmostra(const DadoSensor& amostra);
 
 // Encerra a coleta e salva o CSV.
 bool finalizarArmazenamento();

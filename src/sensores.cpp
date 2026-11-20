@@ -39,7 +39,7 @@ bool iniciarSensores(){
 
 bool lerSensores(DadoSensor& dado){
     dado.timestamp_ms = millis();
-    dado.temp = bmp.readTemperature();
+    dado.temperatura = bmp.readTemperature();
     dado.pressao = bmp.readPressure();
     
     if(icmDisponivel == true){
@@ -89,7 +89,7 @@ bool atualizarPressaoInicial(float& pressaoInicial){
 float obterAlturaRelativa(float pressaoInicial, float pressaoAtual){
     float alturaRelativa;
     if(pressaoInicial >= 0){
-        float alturaRelativa = 44330 * (1 - (pow((pressaoAtual / pressaoInicial),0.1903)));
+        alturaRelativa = 44330 * (1 - (pow((pressaoAtual / pressaoInicial),0.1903)));
     }
     return alturaRelativa;
 }

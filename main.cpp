@@ -14,7 +14,7 @@ void setup() {
         
     }
     //CABEÇALHO CSV
-    Serial.println("ax,ay,az,gx,gy,gz,mx,my,mz,pressao,temp,timestamp_ms");
+    Serial.println("ax,ay,az,gx,gy,gz,mx,my,mz,pressao,temperatura,timestamp_ms");
 }
 
 void loop() {
@@ -46,7 +46,7 @@ void loop() {
 
     Serial.print(dado.pressao);
     Serial.print(",");
-    Serial.print(dado.temp);
+    Serial.print(dado.temperatura);
     Serial.print(",");
     Serial.println(dado.timestamp_ms);
 }

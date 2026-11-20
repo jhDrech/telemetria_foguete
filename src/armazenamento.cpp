@@ -9,7 +9,7 @@ namespace
     // BUFFER DE AMOSTRAS EM RAM
     // ========================================================
 
-    AmostraVoo amostras[CAPACIDADE_TOTAL];
+    DadoSensor amostras[CAPACIDADE_TOTAL];
 
     size_t indicePreLancamento = 0;
     size_t quantidadePreLancamento = 0;
@@ -35,18 +35,18 @@ namespace
     // ESCRITA DE UMA AMOSTRA NO CSV
     // ========================================================
 
-    bool escreverAmostra(File &arquivo, const AmostraVoo &amostra)
+    bool escreverAmostra(File &arquivo, const DadoSensor &amostra)
     {
         // Interrompe a escrita se algum campo nao puder ser escrito.
         return arquivo.print(amostra.timestamp_ms) > 0 &&
                arquivo.print(",") > 0 &&
-               arquivo.print(amostra.pressao_pa, 2) > 0 &&
+               arquivo.print(amostra.pressao, 2) > 0 &&
                arquivo.print(",") > 0 &&
-               arquivo.print(amostra.temperatura_c, 2) > 0 &&
+               arquivo.print(amostra.temperatura, 2) > 0 &&
                arquivo.print(",") > 0 &&
-               arquivo.print(amostra.altitude_relativa_bruta_m, 3) > 0 &&
+               arquivo.print(amostra.ax, 3) > 0 &&
                arquivo.print(",") > 0 &&
-               arquivo.print(amostra.altitude_relativa_filtrada_m, 3) > 0 &&
+               arquivo.print(amostra.ay, 3) > 0 &&
                arquivo.println() == 2;
     }
 
@@ -136,7 +136,7 @@ bool confirmarLancamentoArmazenamento()
 // REGISTRO DE DADOS EM MEMORIA
 // ========================================================
 
-bool registrarAmostra(const AmostraVoo &amostra)
+bool registrarAmostra(const DadoSensor &amostra)
 {
     if (!coletaEmAndamento)
     {
