@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
+extern bool icmDisponivel;
 bool iniciarSensores();
 struct DadoSensor{
     uint32_t timestamp_ms;
