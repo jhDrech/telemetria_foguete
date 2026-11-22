@@ -2,33 +2,36 @@
 
 DetectorLancamento inicializarDetectorLancamento()
 {
-    DetectorLancamento detectorLancamento;
+    DetectorLancamento detector;
 
-    detectorLancamento.leiturasAcimaDoLimite = 0;
-    detectorLancamento.lancamentoDetectado = false;
+    detector.leiturasAcimaDoLimite = 0;
+    detector.lancamentoDetectado = false;
 
-    return detectorLancamento;
+    return detector;
 }
 
-void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento,
-                                 float aceleracao_vertical,
-                                 bool aceleracao_vertical_valida)
+void atualizarDetectorLancamento(
+    DetectorLancamento &detector,
+    float aceleracaoTotal,
+    bool aceleracaoValida)
 {
-
-    if (detectorLancamento.lancamentoDetectado) {
+    if (detector.lancamentoDetectado)
+    {
         return;
     }
-        if (aceleracao_vertical_valida &&
-        aceleracao_vertical > ALTITUDE_MINIMA_LANCAMENTO_M) {
 
-        detectorLancamento.leiturasAcimaDoLimite++;
+    if (aceleracaoValida &&
+        aceleracaoTotal >
+            ACELERACAO_MINIMA_LANCAMENTO_M_S2)
+    {
+        // Mantem o criterio ja adotado no projeto:
+        // amostras validas acima do limiar sao acumuladas.
+        detector.leiturasAcimaDoLimite++;
     }
-    else{
 
-        detectorLancamento.leiturasAcimaDoLimite = 0;
-    }
-
-    if (detectorLancamento.leiturasAcimaDoLimite >= LEITURAS_PARA_DETECTAR_LANCAMENTO) {
-        detectorLancamento.lancamentoDetectado = true;
+    if (detector.leiturasAcimaDoLimite >=
+        LEITURAS_PARA_DETECTAR_LANCAMENTO)
+    {
+        detector.lancamentoDetectado = true;
     }
 }
