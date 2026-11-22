@@ -2,6 +2,7 @@
 #define ARMAZENAMENTO_H
 
 #include <Arduino.h>
+#include "sensores.h"
 
 // ========================================================
 // CONFIGURACAO DO REGISTRO EM MEMORIA
@@ -26,26 +27,6 @@ constexpr size_t CAPACIDADE_TOTAL =
     CAPACIDADE_POS_LANCAMENTO + 1;
 
 // ========================================================
-// DADOS DE CADA AMOSTRA
-// ========================================================
-
-struct AmostraVoo
-{
-    uint32_t timestamp_ms;
-
-    float pressao_pa;
-    float temperatura_c;
-
-    // O ICM e usado somente para reconhecer o lancamento.
-    float aceleracao_total_m_s2;
-    bool lancamento_detectado;
-
-    // O restante do voo e acompanhado pelo BMP280.
-    float altitude_relativa_bruta_m;
-    float altitude_relativa_filtrada_m;
-};
-
-// ========================================================
 // FUNCOES DO ARMAZENAMENTO
 // ========================================================
 
@@ -65,7 +46,7 @@ bool criarArquivoNovoVoo(
 bool confirmarLancamentoArmazenamento();
 
 bool registrarAmostra(
-    const AmostraVoo &amostra);
+    const DadoSensor &amostra);
 
 bool finalizarArmazenamento();
 
