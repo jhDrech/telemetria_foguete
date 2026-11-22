@@ -1,44 +1,34 @@
 #pragma once
+
 #include <Arduino.h>
 
-bool iniciarSensores();
-struct DadoSensor{
+struct DadoSensor
+{
     uint32_t timestamp_ms;
-    
+
     float pressao = NAN;
     float temp = NAN;
+
+    // O ICM20948 e usado somente como acelerometro.
     float ax = NAN;
     float ay = NAN;
     float az = NAN;
-
-    float gx = NAN;
-    float gy = NAN;
-    float gz = NAN;
-
-    float mx = NAN;
-    float my = NAN;
-    float mz = NAN;
 };
-bool lerSensores(DadoSensor& dados);
 
-struct DadoEstimado{
-    // são definidos apenas após o lançamento depois da fase de processamento de dados brutos
-    float ax = NAN;
-    float ay = NAN;
-    float az = NAN;
-
-    float gx = NAN;
-    float gy = NAN;
-    float gz = NAN;
-
-    float mx = NAN;
-    float my = NAN;
-    float mz = NAN;
-
-    // obtidos durante o voo para definição dos estados
+struct DadoEstimado
+{
+    // Estimativa barometrica usada durante o voo.
     float altitude_relativa = NAN;
-    float velocidade_vertical = NAN;
 };
 
-bool atualizarPressaoInicial(float& pressaoAtual);
-float obterALturaRelativa(float pressaoInicial, float pressaoAtual);
+bool iniciarSensores();
+
+bool lerSensores(DadoSensor &dado);
+
+bool atualizarPressaoInicial(float &pressaoInicial);
+
+float obterAlturaRelativa(
+    float pressaoInicial,
+    float pressaoAtual);
+
+float obterAceleracaoTotal(const DadoSensor &dado);
