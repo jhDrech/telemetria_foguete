@@ -3,6 +3,8 @@
 #include <math.h>
 
 #include "sensores.h"
+// #include "orientacao.h"
+// #include "movimento.h"
 #include "detector_apogeu.h"
 #include "controle_paraquedas.h"
 #include "detector_lancamento.h"
@@ -10,10 +12,12 @@
 #include "armazenamento.h"
 #include "rede_wifi.h"
 
+// Momento em que o experimento realmente começa.
+// Assim o timestamp do CSV começa próximo de zero,
+// independentemente do tempo gasto no setup.
 static uint32_t inicioTesteMs = 0;
 static float pressaoInicial = NAN;
 static bool pressaoPronta = false;
-
 static DetectorApogeu detectorApogeu;
 static ControleParaquedas controleParaquedas;
 static Servo servoParaquedas;
@@ -36,12 +40,9 @@ static uint32_t ultimaTentativaMs = 0;
 
 constexpr uint8_t MAX_TENTATIVAS = 3;
 constexpr uint32_t INTERVALO_TENTATIVAS_MS = 2000;
-
 static const int ANGULO_INICIAL = 180;
 static const int ANGULO_ACIONAMENTO = 60;
-
-static EstadoParaquedas ultimoEstado =
-    EstadoParaquedas::AGUARDANDO;
+static EstadoParaquedas ultimoEstado = EstadoParaquedas::AGUARDANDO;
 
 const char *CABECALHO_CSV =
     "timestamp_ms,"
@@ -54,7 +55,11 @@ const char *CABECALHO_CSV =
 
 void setup()
 {
+
     Serial.begin(115200);
+
+    // Mantemos o atraso que já estava sendo usado
+    // para estabilização da comunicação USB.
     delay(8000);
 
     // ========================================================
@@ -63,7 +68,6 @@ void setup()
 
     if (!iniciarSensores())
     {
-        Serial.println("Erro ao iniciar BMP280 ou ICM20948.");
 
         while (true)
         {
@@ -71,35 +75,41 @@ void setup()
         }
     }
 
+    // A referencia barometrica sera coletada sem bloquear no loop,
+    // usando atualizarPressaoInicial() da implementacao do Joao.
+
     // ========================================================
-    // FILTRO DA ALTITUDE BAROMETRICA
+    // INICIALIZACAO DA ORIENTACAO / DMP
     // ========================================================
+
+    // iniciarOrientacao();
+
+    // Filtro de kalman
 
     filtroAltitude = inicializarFiltroKalman(
-        0.0f,
-        1.0f,
-        0.01f,
-        0.25f);
+        0.0f,  // estimativa inicial (m)
+        1.0f,  // incerteza inicial (m²)
+        0.01f, // ruidoProcesso (m²)
+        0.25f  // ruidoMedicao (m²)
+    );
+
+    // INICIALIZACAO DO MOVIMENTO
+
+    // iniciarMovimento();
 
     // ========================================================
-    // DETECTORES E PARAQUEDAS
+    // INICIO EFETIVO DO EXPERIMENTO
     // ========================================================
 
-    detectorApogeu =
-        inicializarDetectorApogeu();
+    detectorApogeu = inicializarDetectorApogeu();
 
-    detectorLancamento =
-        inicializarDetectorLancamento();
+    controleParaquedas = inicializarControleParaquedas();
 
-    controleParaquedas =
-        inicializarControleParaquedas();
+    detectorLancamento = inicializarDetectorLancamento();
 
+    // configuração do servo
     servoParaquedas.attach(10);
     servoParaquedas.write(ANGULO_INICIAL);
-
-    // ========================================================
-    // ARMAZENAMENTO
-    // ========================================================
 
     if (!iniciarArmazenamento())
     {
@@ -111,12 +121,29 @@ void setup()
         }
     }
 
+    // ========================================================
+    // CABECALHO CSV
+    // ========================================================
+
     Serial.println(CABECALHO_CSV);
+
+    // if (!criarArquivoCSV("/experimento.csv", CABECALHO_CSV))
+    // {
+    //     Serial.println("Erro ao criar arquivo CSV!");
+
+    //     while (true)
+    //     {
+    //         delay(1000);
+    //     }
+    // }
+
+    // ========================================================
+    // PREPARACAO DO BUFFER EM MEMORIA
+    // ========================================================
 
     if (!criarArquivoNovoVoo(CABECALHO_CSV))
     {
         Serial.println("Erro ao preparar buffer em memoria!");
-
         while (true)
         {
             delay(1000);
@@ -126,64 +153,45 @@ void setup()
     estadoGravacao = EstadoGravacao::GRAVANDO;
 
     // ========================================================
-    // WI-FI
+    // INICIALIZACAO DO WI-FI
     // ========================================================
 
     if (!iniciarWiFi())
     {
-        Serial.println(
-            "Wi-Fi indisponivel. Gravacao local continua.");
+        Serial.println("Wi-Fi indisponivel. Gravacao local continua.");
     }
 
-    linhaCSV.reserve(256);
+    linhaCSV.reserve(512);
+
     inicioTesteMs = millis();
 }
 
 void loop()
 {
     uint32_t inicioCicloMs = millis();
-
     // ========================================================
     // LEITURA DOS SENSORES
     // ========================================================
 
     DadoSensor dado{};
+    bool leituraValida = lerSensores(dado);
     DadoEstimado estimado{};
 
-    bool leituraBarometricaValida =
-        lerSensores(dado);
-
-    // A referencia de pressao e coletada antes de iniciar
-    // o reconhecimento do voo.
     if (!pressaoPronta)
     {
-        pressaoPronta =
-            atualizarPressaoInicial(pressaoInicial);
-
+        pressaoPronta = atualizarPressaoInicial(pressaoInicial);
+        // Mantem o servidor acessivel enquanto a referencia e calculada.
         atualizarWiFi();
-
         delay(INTERVALO_AMOSTRAGEM_MS);
-
+        // O tempo do experimento comeca depois da referencia estar pronta.
         inicioTesteMs = millis();
         return;
     }
 
-    // ========================================================
-    // ICM20948: SOMENTE DETECCAO DO LANCAMENTO
-    // ========================================================
-
-    float aceleracaoTotal =
-        obterAceleracaoTotal(dado);
-
-    bool aceleracaoValida =
-        isfinite(aceleracaoTotal);
-
-    // ========================================================
-    // BMP280: ALTITUDE RELATIVA
-    // ========================================================
+    // ALTITUDE RELATIVA
 
     bool altitudeValida =
-        leituraBarometricaValida &&
+        leituraValida &&
         isfinite(dado.pressao) &&
         dado.pressao > 0.0f &&
         isfinite(pressaoInicial) &&
@@ -193,18 +201,13 @@ void loop()
 
     if (altitudeValida)
     {
-        estimado.altitude_relativa =
-            obterAlturaRelativa(
-                pressaoInicial,
-                dado.pressao);
+        estimado.altitude_relativa = obterAlturaRelativa(
+            pressaoInicial,
+            dado.pressao);
 
-        altitudeValida =
-            isfinite(estimado.altitude_relativa);
+        altitudeValida = isfinite(estimado.altitude_relativa);
     }
-
-    // ========================================================
-    // FILTRO DA ALTITUDE
-    // ========================================================
+    // Aplicação do Filtro
 
     if (altitudeValida)
     {
@@ -214,39 +217,35 @@ void loop()
     }
 
     altitudeValida =
-        altitudeValida &&
-        isfinite(filtroAltitude.estimativa);
+        altitudeValida && isfinite(filtroAltitude.estimativa);
 
-    // ========================================================
-    // DETECCAO DO LANCAMENTO: ICM OU BMP
-    // ========================================================
+    // DETECCAO DO LANCAMENTO
 
-    if (icmDisponivel)
-    {
+    float aceleracaoTotal = obterAceleracaoTotal(dado);
+    bool aceleracaoValida = isfinite(aceleracaoTotal);
+
+    if (icmDisponivel) {
+
         atualizarDetectorLancamento(
             detectorLancamento,
             aceleracaoTotal,
             aceleracaoValida);
     }
-    else
-    {
+    else {
+
         atualizarDetectorLancamentoBMP(
             detectorLancamento,
             estimado.altitude_relativa,
             altitudeValida);
     }
 
-    // ========================================================
-    // CONFIRMACAO DO LANCAMENTO
-    // ========================================================
+    // INICIO DA CONTAGEM E CONFIRMACAO DO LANCAMENTO
 
     if (detectorLancamento.lancamentoDetectado &&
         !contagemRegistroIniciada)
     {
         instanteLancamentoMs = millis();
         contagemRegistroIniciada = true;
-
-        Serial.println(icmDisponivel ? "Lancamento detectado pelo ICM20948." : "Subida reconhecida pelo BMP280.");
 
         if (!confirmarLancamentoArmazenamento())
         {
@@ -255,31 +254,20 @@ void loop()
 
             if (!gravacaoEmAndamento())
             {
-                estadoGravacao =
-                    EstadoGravacao::FINALIZADA;
+                estadoGravacao = EstadoGravacao::FINALIZADA;
             }
         }
     }
+    // Passando no detector de apogeu
 
-    // ========================================================
-    // APOGEU: SOMENTE PELA ALTITUDE BAROMETRICA
-    // ========================================================
-
-    if (detectorLancamento.lancamentoDetectado &&
-        altitudeValida)
+    if (detectorLancamento.lancamentoDetectado && altitudeValida)
     {
         atualizarDetectorApogeu(
             detectorApogeu,
             filtroAltitude.estimativa);
     }
 
-    // ========================================================
-    // PARAQUEDAS
-    // ========================================================
-
-    paraquedas(
-        controleParaquedas,
-        detectorApogeu.apogeuDetectado);
+    paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
 
     if (controleParaquedas.estado != ultimoEstado)
     {
@@ -288,11 +276,9 @@ void loop()
         case EstadoParaquedas::ACIONADO:
             servoParaquedas.write(ANGULO_ACIONAMENTO);
             break;
-
         case EstadoParaquedas::FINALIZADO:
             servoParaquedas.write(ANGULO_INICIAL);
             break;
-
         default:
             break;
         }
@@ -301,92 +287,129 @@ void loop()
     }
 
     // ========================================================
-    // CSV
+    // TEMPO RELATIVO DO EXPERIMENTO
     // ========================================================
 
-    uint32_t timestampMs =
-        millis() - inicioTesteMs;
+    uint32_t timestampMs = millis() - inicioTesteMs;
 
+    // CSV
     linhaCSV = String(timestampMs) + ",";
     linhaCSV += String(dado.pressao, 2) + ",";
     linhaCSV += String(dado.temp, 2) + ",";
     linhaCSV += String(aceleracaoTotal, 4) + ",";
+    linhaCSV += String(detectorLancamento.lancamentoDetectado ? 1 : 0) + ",";
+    linhaCSV += String(estimado.altitude_relativa, 3) + ",";
     linhaCSV += String(
-        detectorLancamento.lancamentoDetectado ? 1 : 0) + ",";
-    linhaCSV += String(
-        estimado.altitude_relativa,
-        3) + ",";
-    linhaCSV += String(
-        altitudeValida
-            ? filtroAltitude.estimativa
-            : NAN,
+        altitudeValida ? filtroAltitude.estimativa : NAN,
         3);
+    // // ACELEROMETRO
+    // linhaCSV += String(dado.ax, 5) + ",";
+    // linhaCSV += String(dado.ay, 5) + ",";
+    // linhaCSV += String(dado.az, 5) + ",";
+
+    // // GIROSCOPIO
+    // linhaCSV += String(dado.gx, 6) + ",";
+    // linhaCSV += String(dado.gy, 6) + ",";
+    // linhaCSV += String(dado.gz, 6) + ",";
+
+    // // MAGNETOMETRO
+    // linhaCSV += String(dado.mx, 3) + ",";
+    // linhaCSV += String(dado.my, 3) + ",";
+    // linhaCSV += String(dado.mz, 3) + ",";
+
+    // // QUATERNION
+    // linhaCSV += String(dado.q0, 7) + ",";
+    // linhaCSV += String(dado.q1, 7) + ",";
+    // linhaCSV += String(dado.q2, 7) + ",";
+    // linhaCSV += String(dado.q3, 7) + ",";
+
+    // // DIAGNOSTICO DO QUATERNION
+    // linhaCSV += String(estadoDMP.norma_q, 7) + ",";
+    // linhaCSV += String(dado.quaternion_valido ? 1 : 0) + ",";
+
+    // // ORIENTACAO
+    // linhaCSV += String(estadoDMP.roll_deg, 4) + ",";
+    // linhaCSV += String(estadoDMP.pitch_deg, 4) + ",";
+
+    // // CONVERGENCIA
+    // linhaCSV += String(estadoDMP.variacao_roll_deg, 4) + ",";
+    // linhaCSV += String(estadoDMP.variacao_pitch_deg, 4) + ",";
+    // linhaCSV += String(estadoDMP.janela_estabilidade ? 1 : 0) + ",";
+    // linhaCSV += String(estadoDMP.dmp_pronto ? 1 : 0) + ",";
+
+    // // ACELERACAO LINEAR
+    // linhaCSV += String(dado.ax_linear, 5) + ",";
+    // linhaCSV += String(dado.ay_linear, 5) + ",";
+    // linhaCSV += String(dado.az_linear, 5) + ",";
+    // linhaCSV += String(dado.aceleracao_linear_valida ? 1 : 0) + ",";
+
+    // // CALIBRACAO E ALTITUDE
+    // linhaCSV += String(pressaoInicial, 2) + ",";
+    // linhaCSV += String(estimado.altitude_relativa, 3) + ",";
+    // linhaCSV += String(filtroAltitude.estimativa, 3) + ",";
+
+    // // ACELERACAO VERTICAL
+    // linhaCSV += String(dado.aceleracao_vertical, 5) + ",";
+    // linhaCSV += String(dado.aceleracao_vertical_valida ? 1 : 0) + ",";
+
+    // // VELOCIDADE VERTICAL
+    // linhaCSV += String(dado.velocidade_vertical, 5) + ",";
+    // linhaCSV += String(dado.velocidade_vertical_valida ? 1 : 0) + ",";
+
+    // // DETECCAO DE LANCAMENTO
+    // linhaCSV += String(detectorLancamento.lancamentoDetectado ? 1 : 0) + ",";
+
+    // // ESTADO DO PARAQUEDAS
+    // linhaCSV += String(static_cast<int>(controleParaquedas.estado));
 
     Serial.println(linhaCSV);
-
-    // ========================================================
-    // ARMAZENAMENTO DO VOO
-    // ========================================================
-
     if (estadoGravacao == EstadoGravacao::GRAVANDO)
     {
+        // Monta a amostra que sera guardada no array.
         AmostraVoo amostra;
 
         amostra.timestamp_ms = timestampMs;
         amostra.pressao_pa = dado.pressao;
         amostra.temperatura_c = dado.temp;
-        amostra.aceleracao_total_m_s2 =
-            aceleracaoTotal;
-        amostra.lancamento_detectado =
-            detectorLancamento.lancamentoDetectado;
-        amostra.altitude_relativa_bruta_m =
-            estimado.altitude_relativa;
+        amostra.aceleracao_total_m_s2 = aceleracaoTotal;
+        amostra.lancamento_detectado = detectorLancamento.lancamentoDetectado;
+        amostra.altitude_relativa_bruta_m = estimado.altitude_relativa;
         amostra.altitude_relativa_filtrada_m =
-            altitudeValida
-                ? filtroAltitude.estimativa
-                : NAN;
+            altitudeValida ? filtroAltitude.estimativa : NAN;
 
-        bool amostraRegistrada =
-            registrarAmostra(amostra);
+        bool amostraRegistrada = registrarAmostra(amostra);
 
         bool tempoEncerrado =
             contagemRegistroIniciada &&
-            millis() - instanteLancamentoMs >=
-                TEMPO_POS_LANCAMENTO_MS;
+            millis() - instanteLancamentoMs >= TEMPO_POS_LANCAMENTO_MS;
 
-        if (!amostraRegistrada ||
-            tempoEncerrado)
+        if (!amostraRegistrada || tempoEncerrado)
         {
-            estadoGravacao =
-                EstadoGravacao::FINALIZADA;
+            estadoGravacao = EstadoGravacao::FINALIZADA;
 
             if (!amostraRegistrada)
             {
-                Serial.println(
-                    "Coleta interrompida: falha ao guardar amostra.");
+                Serial.println("Coleta interrompida: falha ao guardar amostra.");
             }
             else
             {
-                Serial.println(
-                    "Tempo de coleta encerrado.");
+                Serial.println("Tempo de coleta encerrado.");
             }
 
             if (finalizarArmazenamento())
             {
-                Serial.println(
-                    "CSV salvo e disponivel para download.");
+                Serial.println("CSV salvo e disponivel para download.");
             }
             else
             {
-                Serial.println(
-                    "CSV nao foi salvo. Dados permanecem na RAM.");
+                Serial.println("CSV nao foi salvo. Dados permanecem na RAM.");
                 ultimaTentativaMs = millis();
             }
         }
     }
 
     // ========================================================
-    // NOVAS TENTATIVAS AUTOMATICAS DE SALVAMENTO
+    // TENTATIVAS AUTOMATICAS DE SALVAMENTO
     // ========================================================
 
     if (estadoGravacao == EstadoGravacao::FINALIZADA &&
@@ -406,32 +429,22 @@ void loop()
         }
         else if (tentativasSalvamento >= MAX_TENTATIVAS)
         {
-            Serial.println(
-                "Tentativas automaticas esgotadas. Dados permanecem na RAM.");
+            Serial.println("Tentativas automaticas esgotadas. Dados permanecem na RAM.");
         }
     }
 
-    // ========================================================
-    // WI-FI
-    // ========================================================
-
+    // Atende o navegador antes do lancamento e apos a coleta.
     if (!contagemRegistroIniciada ||
         estadoGravacao == EstadoGravacao::FINALIZADA)
     {
         atualizarWiFi();
     }
 
-    // ========================================================
-    // CONTROLE DA TAXA DE AMOSTRAGEM
-    // ========================================================
-
-    uint32_t duracaoCicloMs =
-        millis() - inicioCicloMs;
+    // Aguarda somente o tempo restante para completar o intervalo.
+    uint32_t duracaoCicloMs = millis() - inicioCicloMs;
 
     if (duracaoCicloMs < INTERVALO_AMOSTRAGEM_MS)
     {
-        delay(
-            INTERVALO_AMOSTRAGEM_MS -
-            duracaoCicloMs);
+        delay(INTERVALO_AMOSTRAGEM_MS - duracaoCicloMs);
     }
-}
+};
