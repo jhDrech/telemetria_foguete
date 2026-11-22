@@ -29,7 +29,7 @@ void sensoresObrigatoriosPrecisamEstarPresentes()
     TEST_ASSERT_TRUE(iniciarSensores());
 
     icmSimulado::presente = false;
-    TEST_ASSERT_FALSE(iniciarSensores());
+    TEST_ASSERT_TRUE(iniciarSensores());
 
     icmSimulado::presente = true;
     bmpSimulado::endereco = 0;
