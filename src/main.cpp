@@ -178,11 +178,6 @@ void loop()
     bool aceleracaoValida =
         isfinite(aceleracaoTotal);
 
-    atualizarDetectorLancamento(
-        detectorLancamento,
-        aceleracaoTotal,
-        aceleracaoValida);
-
     // ========================================================
     // BMP280: ALTITUDE RELATIVA
     // ========================================================
@@ -223,6 +218,25 @@ void loop()
         isfinite(filtroAltitude.estimativa);
 
     // ========================================================
+    // DETECCAO DO LANCAMENTO: ICM OU BMP
+    // ========================================================
+
+    if (icmDisponivel)
+    {
+        atualizarDetectorLancamento(
+            detectorLancamento,
+            aceleracaoTotal,
+            aceleracaoValida);
+    }
+    else
+    {
+        atualizarDetectorLancamentoBMP(
+            detectorLancamento,
+            estimado.altitude_relativa,
+            altitudeValida);
+    }
+
+    // ========================================================
     // CONFIRMACAO DO LANCAMENTO
     // ========================================================
 
@@ -232,7 +246,7 @@ void loop()
         instanteLancamentoMs = millis();
         contagemRegistroIniciada = true;
 
-        Serial.println("Lancamento detectado pelo ICM20948.");
+        Serial.println(icmDisponivel ? "Lancamento detectado pelo ICM20948." : "Subida reconhecida pelo BMP280.");
 
         if (!confirmarLancamentoArmazenamento())
         {
