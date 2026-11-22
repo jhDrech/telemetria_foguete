@@ -4,7 +4,7 @@
 
 namespace
 {
-    AmostraVoo amostras[CAPACIDADE_TOTAL];
+    DadoSensor amostras[CAPACIDADE_TOTAL];
 
     size_t indicePreLancamento = 0;
     size_t quantidadePreLancamento = 0;
@@ -29,29 +29,33 @@ namespace
 
     bool escreverAmostra(
         File &arquivo,
-        const AmostraVoo &amostra)
+        const DadoSensor &amostra)
     {
+        // Registra os dados brutos na ordem do cabecalho CSV.
         return
             arquivo.print(amostra.timestamp_ms) > 0 &&
             arquivo.print(",") > 0 &&
-            arquivo.print(amostra.pressao_pa, 2) > 0 &&
+            arquivo.print(amostra.pressao, 2) > 0 &&
             arquivo.print(",") > 0 &&
-            arquivo.print(amostra.temperatura_c, 2) > 0 &&
+            arquivo.print(amostra.temp, 2) > 0 &&
             arquivo.print(",") > 0 &&
-            arquivo.print(
-                amostra.aceleracao_total_m_s2,
-                4) > 0 &&
+            arquivo.print(amostra.ax, 5) > 0 &&
             arquivo.print(",") > 0 &&
-            arquivo.print(
-                amostra.lancamento_detectado ? 1 : 0) > 0 &&
+            arquivo.print(amostra.ay, 5) > 0 &&
             arquivo.print(",") > 0 &&
-            arquivo.print(
-                amostra.altitude_relativa_bruta_m,
-                3) > 0 &&
+            arquivo.print(amostra.az, 5) > 0 &&
             arquivo.print(",") > 0 &&
-            arquivo.print(
-                amostra.altitude_relativa_filtrada_m,
-                3) > 0 &&
+            arquivo.print(amostra.gx, 6) > 0 &&
+            arquivo.print(",") > 0 &&
+            arquivo.print(amostra.gy, 6) > 0 &&
+            arquivo.print(",") > 0 &&
+            arquivo.print(amostra.gz, 6) > 0 &&
+            arquivo.print(",") > 0 &&
+            arquivo.print(amostra.mx, 3) > 0 &&
+            arquivo.print(",") > 0 &&
+            arquivo.print(amostra.my, 3) > 0 &&
+            arquivo.print(",") > 0 &&
+            arquivo.print(amostra.mz, 3) > 0 &&
             arquivo.println() == 2;
     }
 }
@@ -129,7 +133,7 @@ bool confirmarLancamentoArmazenamento()
 }
 
 bool registrarAmostra(
-    const AmostraVoo &amostra)
+    const DadoSensor &amostra)
 {
     if (!coletaEmAndamento)
     {
