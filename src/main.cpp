@@ -46,12 +46,11 @@ static EstadoParaquedas ultimoEstado = EstadoParaquedas::AGUARDANDO;
 
 const char *CABECALHO_CSV =
     "timestamp_ms,"
-    "pressao_pa,"
-    "temperatura_c,"
-    "aceleracao_total_m_s2,"
-    "lancamento_detectado,"
-    "altitude_relativa_bruta_m,"
-    "altitude_relativa_filtrada_m";
+    "pressao,"
+    "temp,"
+    "ax,ay,az,"
+    "gx,gy,gz,"
+    "mx,my,mz";
 
 void setup()
 {
@@ -292,30 +291,19 @@ void loop()
 
     uint32_t timestampMs = millis() - inicioTesteMs;
 
-    // CSV
+    // CSV dos dados brutos do sensor
     linhaCSV = String(timestampMs) + ",";
     linhaCSV += String(dado.pressao, 2) + ",";
     linhaCSV += String(dado.temp, 2) + ",";
-    linhaCSV += String(aceleracaoTotal, 4) + ",";
-    linhaCSV += String(detectorLancamento.lancamentoDetectado ? 1 : 0) + ",";
-    linhaCSV += String(estimado.altitude_relativa, 3) + ",";
-    linhaCSV += String(
-        altitudeValida ? filtroAltitude.estimativa : NAN,
-        3);
-    // // ACELEROMETRO
-    // linhaCSV += String(dado.ax, 5) + ",";
-    // linhaCSV += String(dado.ay, 5) + ",";
-    // linhaCSV += String(dado.az, 5) + ",";
-
-    // // GIROSCOPIO
-    // linhaCSV += String(dado.gx, 6) + ",";
-    // linhaCSV += String(dado.gy, 6) + ",";
-    // linhaCSV += String(dado.gz, 6) + ",";
-
-    // // MAGNETOMETRO
-    // linhaCSV += String(dado.mx, 3) + ",";
-    // linhaCSV += String(dado.my, 3) + ",";
-    // linhaCSV += String(dado.mz, 3) + ",";
+    linhaCSV += String(dado.ax, 5) + ",";
+    linhaCSV += String(dado.ay, 5) + ",";
+    linhaCSV += String(dado.az, 5) + ",";
+    linhaCSV += String(dado.gx, 6) + ",";
+    linhaCSV += String(dado.gy, 6) + ",";
+    linhaCSV += String(dado.gz, 6) + ",";
+    linhaCSV += String(dado.mx, 3) + ",";
+    linhaCSV += String(dado.my, 3) + ",";
+    linhaCSV += String(dado.mz, 3);
 
     // // QUATERNION
     // linhaCSV += String(dado.q0, 7) + ",";
@@ -365,17 +353,10 @@ void loop()
     Serial.println(linhaCSV);
     if (estadoGravacao == EstadoGravacao::GRAVANDO)
     {
-        // Monta a amostra que sera guardada no array.
-        AmostraVoo amostra;
-
+        // Guarda a estrutura de dados brutos lida dos sensores.
+        // O timestamp do registro usa o inicio do experimento.
+        DadoSensor amostra = dado;
         amostra.timestamp_ms = timestampMs;
-        amostra.pressao_pa = dado.pressao;
-        amostra.temperatura_c = dado.temp;
-        amostra.aceleracao_total_m_s2 = aceleracaoTotal;
-        amostra.lancamento_detectado = detectorLancamento.lancamentoDetectado;
-        amostra.altitude_relativa_bruta_m = estimado.altitude_relativa;
-        amostra.altitude_relativa_filtrada_m =
-            altitudeValida ? filtroAltitude.estimativa : NAN;
 
         bool amostraRegistrada = registrarAmostra(amostra);
 
