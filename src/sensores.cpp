@@ -1,140 +1,100 @@
 #include <Arduino.h>
-#include <Wire.h>
+#include<Wire.h>
 #include <Adafruit_BMP280.h>
 #include <ICM_20948.h>
-
 #include "sensores.h"
 
-namespace
-{
-    ICM_20948_I2C icm;
-    Adafruit_BMP280 bmp;
+ICM_20948_I2C icm;
+Adafruit_BMP280 bmp;
 
-    bool icmDisponivel = false;
-    bool bmpDisponivel = false;
+bool icmDisponivel;
+bool bmpDisponivel;
 
-    constexpr uint8_t PIN_SDA = 8;
-    constexpr uint8_t PIN_SCL = 9;
-    constexpr uint8_t ENDERECO_BMP = 0x77;
+constexpr uint8_t PIN_SDA = 8;
+constexpr uint8_t PIN_SCL = 9;
+constexpr uint8_t ENDERECO_ICM = 0x68;
+constexpr uint8_t ENDERECO_BMP = 0x77;
+constexpr float CONVERCAO_ACCEL = (9.80665f / 1000.0f); // converte milig da accel para m/s²
+constexpr float CONVERCAO_GIRO = DEG_TO_RAD; // converte milig da accel para m/s²
 
-    constexpr float CONVERSAO_ACCEL =
-        9.80665f / 1000.0f; // mg -> m/s²
-}
 
-bool iniciarSensores()
-{
+bool iniciarSensores(){
     Wire.begin(PIN_SDA, PIN_SCL);
-
-    bmpDisponivel = bmp.begin(ENDERECO_BMP);
-
-    // AD0 = 0 corresponde ao endereco 0x68.
     icm.begin(Wire, 0);
-    icmDisponivel =
-        icm.status == ICM_20948_Stat_Ok;
-
-    // Os dois sensores fazem parte do fluxo principal:
-    // ICM detecta o lancamento e BMP acompanha o voo.
-    return bmpDisponivel && icmDisponivel;
-}
-
-bool lerSensores(DadoSensor &dado)
-{
-    dado.timestamp_ms = millis();
-
-    if (!bmpDisponivel)
-    {
+    
+    if(!bmp.begin(ENDERECO_BMP)){
         return false;
+    }else{
+        bmpDisponivel = true;
     }
 
+    if(icm.status != ICM_20948_Stat_Ok){
+        icmDisponivel = false;
+    }else{
+        icmDisponivel = true;
+    }
+    
+    return true;
+}
+
+bool lerSensores(DadoSensor& dado){
+    dado.timestamp_ms = millis();
     dado.temp = bmp.readTemperature();
     dado.pressao = bmp.readPressure();
-
-    // Cada DadoSensor e criado novamente no loop.
-    // Se nao houver amostra nova do ICM, ax/ay/az permanecem NAN
-    // e nao participam da deteccao do lancamento.
-    if (icmDisponivel && icm.dataReady())
-    {
-        icm.getAGMT();
-
-        dado.ax = icm.accX() * CONVERSAO_ACCEL;
-        dado.ay = icm.accY() * CONVERSAO_ACCEL;
-        dado.az = icm.accZ() * CONVERSAO_ACCEL;
+    
+    if(icmDisponivel == true){
+        if(icm.dataReady()){
+            icm.getAGMT();
+        
+            dado.ax = icm.accX() * CONVERCAO_ACCEL;
+            dado.ay = icm.accY() * CONVERCAO_ACCEL;
+            dado.az = icm.accZ() * CONVERCAO_ACCEL;
+            
+            dado.gx = icm.gyrX() * CONVERCAO_GIRO;
+            dado.gy = icm.gyrY() * CONVERCAO_GIRO;
+            dado.gz = icm.gyrZ() * CONVERCAO_GIRO;
+            
+            dado.mx = icm.magX();
+            dado.my = icm.magY();
+            dado.mz = icm.magZ();
+        }
     }
+    
+    return true;
+};
 
-    return
-        isfinite(dado.pressao) &&
-        dado.pressao > 0.0f &&
-        isfinite(dado.temp);
-}
-
-bool atualizarPressaoInicial(float &pressaoInicial)
-{
-    static float somaPressao = 0.0f;
-    static uint32_t quantidadeAquisicoes = 0;
-    static bool pressaoPronta = false;
+bool atualizarPressaoInicial(float& pressaoInicial){
+    static float soma_pressao = 0;
+    static int qtd_aquisicoes = 0;
+    static bool pressao_pronta = false; 
     static uint32_t inicio = millis();
 
-    if (pressaoPronta)
-    {
+    if(pressao_pronta == true){
         return true;
     }
 
-    float pressaoAtual = bmp.readPressure();
+    soma_pressao += bmp.readPressure();
+    qtd_aquisicoes++;
 
-    if (isfinite(pressaoAtual) &&
-        pressaoAtual > 0.0f)
-    {
-        somaPressao += pressaoAtual;
-        quantidadeAquisicoes++;
-    }
-
-    if (millis() - inicio >= 3000)
-    {
-        if (quantidadeAquisicoes == 0)
-        {
-            return false;
-        }
-
-        pressaoInicial =
-            somaPressao / quantidadeAquisicoes;
-
-        pressaoPronta = true;
+    // desse jeito não para o código pra esperar só o bmp
+    if(millis() - inicio >= 3000){
+        pressaoInicial = soma_pressao / qtd_aquisicoes;
+        pressao_pronta = true;
         return true;
     }
-
+    
     return false;
+};
+
+float obterAlturaRelativa(float pressaoInicial, float pressaoAtual){
+    float alturaRelativa = NAN;
+    if(pressaoInicial > 0 && pressaoAtual > 0){
+        alturaRelativa = 44330 * (1 - (pow((pressaoAtual / pressaoInicial),0.1903)));
+    }
+    return alturaRelativa;
 }
 
-float obterAlturaRelativa(
-    float pressaoInicial,
-    float pressaoAtual)
-{
-    if (!isfinite(pressaoInicial) ||
-        !isfinite(pressaoAtual) ||
-        pressaoInicial <= 0.0f ||
-        pressaoAtual <= 0.0f)
-    {
-        return NAN;
-    }
 
-    return 44330.0f *
-           (1.0f -
-            pow(
-                pressaoAtual / pressaoInicial,
-                0.1903f));
-}
-
-float obterAceleracaoTotal(const DadoSensor &dado)
-{
-    if (!isfinite(dado.ax) ||
-        !isfinite(dado.ay) ||
-        !isfinite(dado.az))
-    {
-        return NAN;
-    }
-
-    return sqrtf(
-        dado.ax * dado.ax +
-        dado.ay * dado.ay +
-        dado.az * dado.az);
+float obterAceleracaoTotal(DadoSensor& dado){
+    return sqrt(pow(dado.ax, 2) + pow(dado.ay, 2) + pow(dado.az, 2));
 }
