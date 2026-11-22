@@ -160,7 +160,7 @@ void aceleracaoDisparaFluxoBarometrico()
     {
         atualizarDetectorLancamento(
             lancamento,
-            ACELERACAO_MINIMA_LANCAMENTO_M_S2 + 1.0f,
+            ACELERACAO_MINIMA_LANCAMENTO + 1.0f,
             true);
     }
 
