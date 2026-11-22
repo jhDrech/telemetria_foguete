@@ -24,14 +24,34 @@ void atualizarDetectorLancamento(
         aceleracaoTotal >
             ACELERACAO_MINIMA_LANCAMENTO_M_S2)
     {
-        // Mantem o criterio ja adotado no projeto:
-        // amostras validas acima do limiar sao acumuladas.
         detector.leiturasAcimaDoLimite++;
+    }
+    else
+    {
+        detector.leiturasAcimaDoLimite = 0;
     }
 
     if (detector.leiturasAcimaDoLimite >=
         LEITURAS_PARA_DETECTAR_LANCAMENTO)
     {
+        detector.lancamentoDetectado = true;
+    }
+}
+
+void atualizarDetectorLancamentoBMP(DetectorLancamento &detector, float altitudeRelativa, bool altitudeValida)
+{
+    if (detector.lancamentoDetectado) {
+        return;
+    }
+
+    if (altitudeValida && altitudeRelativa > ALTITUDE_MINIMA_LANCAMENTO_M) {
+        detector.leiturasAcimaDoLimite++;
+    }
+    else {
+        detector.leiturasAcimaDoLimite = 0;
+    }
+
+    if (detector.leiturasAcimaDoLimite >= LEITURAS_PARA_DETECTAR_LANCAMENTO) {
         detector.lancamentoDetectado = true;
     }
 }
