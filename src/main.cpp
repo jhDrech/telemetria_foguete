@@ -31,6 +31,11 @@ enum class EstadoGravacao
 static EstadoGravacao estadoGravacao = EstadoGravacao::AGUARDANDO;
 static uint32_t instanteLancamentoMs = 0;
 static bool contagemRegistroIniciada = false;
+static uint8_t tentativasSalvamento = 0;
+static uint32_t ultimaTentativaMs = 0;
+
+constexpr uint8_t MAX_TENTATIVAS = 3;
+constexpr uint32_t INTERVALO_TENTATIVAS_MS = 2000;
 
 static const int ANGULO_INICIAL = 180;
 static const int ANGULO_ACIONAMENTO = 60;
@@ -361,7 +366,34 @@ void loop()
             {
                 Serial.println(
                     "CSV nao foi salvo. Dados permanecem na RAM.");
+                ultimaTentativaMs = millis();
             }
+        }
+    }
+
+    // ========================================================
+    // NOVAS TENTATIVAS AUTOMATICAS DE SALVAMENTO
+    // ========================================================
+
+    if (estadoGravacao == EstadoGravacao::FINALIZADA &&
+        obterEstadoArmazenamento() == EstadoArmazenamento::ERRO_AO_SALVAR &&
+        tentativasSalvamento < MAX_TENTATIVAS &&
+        millis() - ultimaTentativaMs >= INTERVALO_TENTATIVAS_MS)
+    {
+        tentativasSalvamento++;
+        ultimaTentativaMs = millis();
+
+        Serial.print("Tentativa adicional de salvamento: ");
+        Serial.println(tentativasSalvamento);
+
+        if (tentarSalvarNovamente())
+        {
+            Serial.println("CSV salvo com sucesso.");
+        }
+        else if (tentativasSalvamento >= MAX_TENTATIVAS)
+        {
+            Serial.println(
+                "Tentativas automaticas esgotadas. Dados permanecem na RAM.");
         }
     }
 
