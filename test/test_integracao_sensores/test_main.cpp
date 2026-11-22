@@ -106,6 +106,35 @@ void alturaTemSinalERejeitaEntradaInvalida()
                 100000)));
 }
 
+void detectorBMPReconheceSubida()
+{
+    auto lancamento = inicializarDetectorLancamento();
+
+    atualizarDetectorLancamentoBMP(lancamento, 6.0f, true);
+    atualizarDetectorLancamentoBMP(lancamento, 6.0f, true);
+    TEST_ASSERT_FALSE(lancamento.lancamentoDetectado);
+
+    atualizarDetectorLancamentoBMP(lancamento, 0.0f, true);
+    TEST_ASSERT_EQUAL_INT(0, lancamento.leiturasAcimaDoLimite);
+
+    for (int i = 0; i < LEITURAS_PARA_DETECTAR_LANCAMENTO; ++i)
+    {
+        atualizarDetectorLancamentoBMP(lancamento, 6.0f, true);
+    }
+    TEST_ASSERT_TRUE(lancamento.lancamentoDetectado);
+}
+
+void detectorICMExigeLeiturasConsecutivas()
+{
+    auto lancamento = inicializarDetectorLancamento();
+
+    atualizarDetectorLancamento(lancamento, 20.0f, true);
+    atualizarDetectorLancamento(lancamento, 20.0f, true);
+    atualizarDetectorLancamento(lancamento, NAN, false);
+    TEST_ASSERT_EQUAL_INT(0, lancamento.leiturasAcimaDoLimite);
+    TEST_ASSERT_FALSE(lancamento.lancamentoDetectado);
+}
+
 void aceleracaoDisparaFluxoBarometrico()
 {
     auto lancamento =
@@ -124,7 +153,7 @@ void aceleracaoDisparaFluxoBarometrico()
             0.01f,
             0.25f);
 
-    // Cinco amostras acima de 2 g confirmam o lancamento.
+    // Tres amostras consecutivas acima de 2 g confirmam o lancamento.
     for (int i = 0;
          i < LEITURAS_PARA_DETECTAR_LANCAMENTO;
          ++i)
@@ -181,6 +210,8 @@ int main()
     RUN_TEST(
         alturaTemSinalERejeitaEntradaInvalida);
 
+    RUN_TEST(detectorBMPReconheceSubida);
+    RUN_TEST(detectorICMExigeLeiturasConsecutivas);
     RUN_TEST(
         aceleracaoDisparaFluxoBarometrico);
 
