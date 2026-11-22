@@ -8,194 +8,133 @@ from pathlib import Path
 PORTA = "/dev/ttyACM0"
 BAUDRATE = 115200
 
-PASTA_SAIDA = Path("dados")
-PASTA_SAIDA.mkdir(exist_ok=True)
 
-nome_arquivo = datetime.now().strftime(
+# ============================================================
+# PASTA DE SAIDA
+# ============================================================
+
+PASTA_SCRIPT = Path(__file__).resolve().parent
+PASTA_PROJETO = PASTA_SCRIPT.parent
+
+PASTA_DADOS = PASTA_PROJETO / "dados"
+PASTA_DADOS.mkdir(parents=True, exist_ok=True)
+
+nome = datetime.now().strftime(
     "teste_%Y-%m-%d_%H-%M-%S.csv"
 )
 
-caminho = PASTA_SAIDA / nome_arquivo
+caminho = PASTA_DADOS / nome
 
 
-print(f"Conectando em {PORTA}...")
-print(f"Arquivo: {caminho}")
-print("Ctrl+C para encerrar.\n")
+# ============================================================
+# CRIA O ARQUIVO IMEDIATAMENTE
+# ============================================================
 
+arquivo = open(
+    caminho,
+    "w",
+    newline="",
+    encoding="utf-8"
+)
+
+escritor = csv.writer(arquivo)
+
+print("Arquivo criado em:")
+print(caminho.resolve())
+print()
+
+
+# ============================================================
+# SERIAL
+# ============================================================
 
 try:
 
-    with serial.Serial(
+    ser = serial.Serial(
         PORTA,
         BAUDRATE,
         timeout=2
-    ) as ser:
+    )
 
-        cabecalho = None
+    print(f"Serial conectada em {PORTA}")
+    print("Esperando cabecalho...\n")
 
-        with open(
-            caminho,
-            "w",
-            newline="",
-            encoding="utf-8"
-        ) as arquivo:
+    cabecalho = None
 
-            escritor = csv.writer(arquivo)
+    while True:
 
-            while True:
+        linha = ser.readline().decode(
+            "utf-8",
+            errors="ignore"
+        ).strip()
 
-                bruto = ser.readline()
-
-                if not bruto:
-                    continue
-
-                linha = bruto.decode(
-                    "utf-8",
-                    errors="ignore"
-                ).strip()
-
-                if not linha:
-                    continue
+        if not linha:
+            continue
 
 
-                # ============================================================
-                # PROCURA O CABECALHO
-                # ============================================================
+        # ----------------------------------------------------
+        # AINDA NAO ENCONTROU O CABECALHO
+        # ----------------------------------------------------
 
-                if cabecalho is None:
+        if cabecalho is None:
 
-                    if linha.startswith("timestamp_ms"):
+            print(f"[SERIAL] {linha}")
 
-                        cabecalho = linha.split(",")
+            if linha.startswith("timestamp_ms"):
 
-                        escritor.writerow(cabecalho)
-                        arquivo.flush()
+                cabecalho = linha.split(",")
 
-                        print("Cabecalho detectado.")
-                        print(
-                            f"Numero de colunas: "
-                            f"{len(cabecalho)}"
-                        )
-                        print("Iniciando captura...\n")
-
-                    continue
-
-
-                # ============================================================
-                # LEITURA DOS DADOS
-                # ============================================================
-
-                valores = linha.split(",")
-
-
-                # Se aparecer alguma mensagem que nao seja CSV,
-                # mostramos para diagnostico em vez de ignorar silenciosamente.
-                if len(valores) != len(cabecalho):
-
-                    print(
-                        f"\n[IGNORADA] "
-                        f"{len(valores)} valores "
-                        f"(esperados {len(cabecalho)})"
-                    )
-
-                    print(linha)
-
-                    continue
-
-
-                # ============================================================
-                # SALVA O CSV
-                # ============================================================
-
-                escritor.writerow(valores)
+                escritor.writerow(cabecalho)
                 arquivo.flush()
 
+                print("\nCABECALHO ENCONTRADO")
+                print(cabecalho)
+                print("\nGravando...\n")
 
-                # Transforma:
-                #
-                # cabecalho + valores
-                #
-                # em:
-                #
-                # dados["ax_linear"]
-                # dados["dmp_pronto"]
-                # etc.
-
-                dados = dict(
-                    zip(cabecalho, valores)
-                )
+            continue
 
 
-                # ============================================================
-                # VISUALIZACAO DO TESTE
-                # ============================================================
+        # ----------------------------------------------------
+        # DADOS
+        # ----------------------------------------------------
 
-                try:
+        valores = linha.split(",")
 
-                    tempo_s = (
-                        float(
-                            dados["timestamp_ms"]
-                        )
-                        / 1000.0
-                    )
+        if len(valores) != len(cabecalho):
 
-                except (ValueError, KeyError):
+            print(f"[IGNORADA] {linha}")
 
-                    tempo_s = 0.0
+            continue
 
 
-                dmp = dados.get(
-                    "dmp_pronto",
-                    "?"
-                )
+        escritor.writerow(valores)
 
-                altitude = dados.get(
-                    "altitude_relativa_m",
-                    "?"
-                )
+        # força a gravacao no disco
+        arquivo.flush()
 
-                ax_linear = dados.get(
-                    "ax_linear",
-                    "?"
-                )
-
-                ay_linear = dados.get(
-                    "ay_linear",
-                    "?"
-                )
-
-                az_linear = dados.get(
-                    "az_linear",
-                    "?"
-                )
-
-
-                if dmp == "1":
-                    estado_dmp = "PRONTO"
-                else:
-                    estado_dmp = "aguardando"
-
-
-                print(
-                    f"\r"
-                    f"tempo={tempo_s:7.2f}s | "
-                    f"DMP={estado_dmp:10} | "
-                    f"alt={altitude:>8} m | "
-                    f"ax={ax_linear:>8} | "
-                    f"ay={ay_linear:>8} | "
-                    f"az={az_linear:>8}",
-                    end="",
-                    flush=True
-                )
+        print(linha)
 
 
 except KeyboardInterrupt:
 
-    print("\n\nCaptura encerrada.")
-    print(f"CSV salvo em: {caminho}")
+    print("\nCaptura encerrada.")
 
 
 except serial.SerialException as erro:
 
-    print("\nErro na comunicacao serial:")
+    print("\nERRO SERIAL:")
     print(erro)
+
+
+finally:
+
+    arquivo.flush()
+    arquivo.close()
+
+    try:
+        ser.close()
+    except:
+        pass
+
+    print("\nCSV salvo em:")
+    print(caminho.resolve())
