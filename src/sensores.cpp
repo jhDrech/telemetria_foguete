@@ -53,10 +53,7 @@ bool lerSensores(DadoSensor& dado){
             dado.gx = icm.gyrX() * CONVERCAO_GIRO;
             dado.gy = icm.gyrY() * CONVERCAO_GIRO;
             dado.gz = icm.gyrZ() * CONVERCAO_GIRO;
-            
-            dado.mx = icm.magX();
-            dado.my = icm.magY();
-            dado.mz = icm.magZ();
+
         }
     }
     

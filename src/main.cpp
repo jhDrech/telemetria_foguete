@@ -181,27 +181,6 @@ void loop()
         return;
     }
 
-    // ========================================================
-    // ORIENTACAO / CONVERGENCIA DO DMP
-    // ========================================================
-
-    // EstadoDMP estadoDMP = atualizarEstadoDMP(dado);
-
-    // ========================================================
-    // ACELERACAO LINEAR
-    // ========================================================
-
-    // calcularAceleracaoLinear(dado, estadoDMP.dmp_pronto);
-
-    // VELOCIDADE VERTICAL
-
-    // atualizarVelocidadeVertical(dado);
-
-    // atualizarDetectorLancamento(
-    //     detectorLancamento,
-    //     dado.aceleracao_vertical,
-    //     dado.aceleracao_vertical_valida);
-
     // ALTITUDE RELATIVA
 
     bool altitudeValida =
@@ -211,15 +190,15 @@ void loop()
         isfinite(pressaoInicial) &&
         pressaoInicial > 0.0f;
 
-    estimado.altitude_relativa = NAN;
+    estimado.altura_relativa = NAN;
 
     if (altitudeValida)
     {
-        estimado.altitude_relativa = obterAlturaRelativa(
+        estimado.altura_relativa = obterAlturaRelativa(
             pressaoInicial,
             dado.pressao);
 
-        altitudeValida = isfinite(estimado.altitude_relativa);
+        altitudeValida = isfinite(estimado.altura_relativa);
     }
     // Aplicação do Filtro
 
@@ -227,18 +206,31 @@ void loop()
     {
         atualizarFiltroKalman(
             filtroAltitude,
-            estimado.altitude_relativa);
+            estimado.altura_relativa);
     }
 
     altitudeValida =
         altitudeValida && isfinite(filtroAltitude.estimativa);
 
-    // DETECCAO DO LANCAMENTO POR ALTITUDE
+    // DETECCAO DO LANCAMENTO
 
-    atualizarDetectorLancamento(
-        detectorLancamento,
-        filtroAltitude.estimativa,
-        altitudeValida);
+    if (icmDisponivel) {
+
+        float aceleracaoTotal = obterAceleracaoTotal(dado);
+        bool aceleracaoValida = isfinite(aceleracaoTotal);
+
+        atualizarDetectorLancamento(
+            detectorLancamento,
+            aceleracaoTotal,
+            aceleracaoValida);
+    }
+    else {
+
+        atualizarDetectorLancamentoBMP(
+            detectorLancamento,
+            estimado.altura_relativa,
+            altitudeValida);
+    }
 
     // INICIO DA CONTAGEM E CONFIRMACAO DO LANCAMENTO
 
@@ -297,7 +289,7 @@ void loop()
     linhaCSV = String(timestampMs) + ",";
     linhaCSV += String(dado.pressao, 2) + ",";
     linhaCSV += String(dado.temperatura, 2) + ",";
-    linhaCSV += String(estimado.altitude_relativa, 3) + ",";
+    linhaCSV += String(estimado.altura_relativa, 3) + ",";
     linhaCSV += String(
         altitudeValida ? filtroAltitude.estimativa : NAN,
         3);
@@ -370,7 +362,7 @@ void loop()
         amostra.timestamp_ms = timestampMs;
         amostra.pressao_pa = dado.pressao;
         amostra.temperatura_c = dado.temperatura;
-        amostra.altitude_relativa_bruta_m = estimado.altitude_relativa;
+        amostra.altitude_relativa_bruta_m = estimado.altura_relativa;
         amostra.altitude_relativa_filtrada_m =
             altitudeValida ? filtroAltitude.estimativa : NAN;
 

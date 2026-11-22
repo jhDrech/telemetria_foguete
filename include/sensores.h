@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
+extern bool icmDisponivel;
 bool iniciarSensores();
 struct DadoSensor{
     uint32_t timestamp_ms;
@@ -15,9 +16,6 @@ struct DadoSensor{
     float gy = NAN;
     float gz = NAN;
 
-    float mx = NAN;
-    float my = NAN;
-    float mz = NAN;
 };
 bool lerSensores(DadoSensor& dados);
 
@@ -30,14 +28,10 @@ struct DadoEstimado{
     float gx = NAN;
     float gy = NAN;
     float gz = NAN;
-
-    float mx = NAN;
-    float my = NAN;
-    float mz = NAN;
-
     // obtidos durante o voo para definição dos estados
-    float altitude_relativa = NAN;
-    float velocidade_vertical = NAN;
+    float altura_relativa = NAN;
+    float velocidade_total = NAN;
+    // float velocidade_vertical = NAN;
 };
 
 bool atualizarPressaoInicial(float& pressaoAtual);

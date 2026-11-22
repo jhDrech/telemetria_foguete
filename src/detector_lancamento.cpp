@@ -10,21 +10,18 @@ DetectorLancamento inicializarDetectorLancamento()
     return detectorLancamento;
 }
 
-void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento,
-                                 float aceleracao_vertical,
-                                 bool aceleracao_vertical_valida)
+void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento, float aceleracaoTotal, bool aceleracaoValida)
 {
-
     if (detectorLancamento.lancamentoDetectado) {
         return;
     }
-        if (aceleracao_vertical_valida &&
-        aceleracao_vertical > ALTITUDE_MINIMA_LANCAMENTO_M) {
+
+    if (aceleracaoValida &&
+        aceleracaoTotal > ACELERACAO_MINIMA_LANCAMENTO) {
 
         detectorLancamento.leiturasAcimaDoLimite++;
     }
-    else{
-
+    else {
         detectorLancamento.leiturasAcimaDoLimite = 0;
     }
 
@@ -32,3 +29,23 @@ void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento,
         detectorLancamento.lancamentoDetectado = true;
     }
 }
+
+void atualizarDetectorLancamentoBMP(DetectorLancamento &detectorLancamento, float altitudeRelativa, bool altitudeValida)
+{
+    if(detectorLancamento.lancamentoDetectado){
+        return;
+    }
+
+    if(altitudeValida && altitudeRelativa > ALTITUDE_MINIMA_LANCAMENTO){
+        detectorLancamento.leiturasAcimaDoLimite++;
+    }
+    else{
+        detectorLancamento.leiturasAcimaDoLimite = 0;
+    }
+
+    if(detectorLancamento.leiturasAcimaDoLimite >= LEITURAS_PARA_DETECTAR_LANCAMENTO){
+        detectorLancamento.lancamentoDetectado = true;
+    }
+}
+
+
