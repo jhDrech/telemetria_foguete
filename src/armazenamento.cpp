@@ -1,63 +1,76 @@
 #include "armazenamento.h"
-
+#include "filtro_kalman.h"
+#include "sensores.h"
+#include <math.h>
 #include <LittleFS.h>
 
-namespace
+DadoSensor amostras[CAPACIDADE_TOTAL];
+
+size_t indicePreLancamento = 0;
+size_t quantidadePreLancamento = 0;
+size_t quantidadePosLancamento = 0;
+
+bool armazenamentoIniciado = false;
+bool coletaEmAndamento = false;
+bool lancamentoConfirmado = false;
+
+EstadoArmazenamento estadoArmazenamento =
+    EstadoArmazenamento::AGUARDANDO;
+
+bool arquivoSalvo = false;
+
+String cabecalhoCSV;
+static float pressaoInicial = NAN;
+
+const char *CAMINHO_CSV =
+    "/ultimo_lancamento.csv";
+
+const char *CAMINHO_TEMPORARIO =
+    "/experimento_temporario.csv";
+
+bool definirPressaoReferencia(float pressao)
 {
-    DadoSensor amostras[CAPACIDADE_TOTAL];
-
-    size_t indicePreLancamento = 0;
-    size_t quantidadePreLancamento = 0;
-    size_t quantidadePosLancamento = 0;
-
-    bool armazenamentoIniciado = false;
-    bool coletaEmAndamento = false;
-    bool lancamentoConfirmado = false;
-
-    EstadoArmazenamento estadoArmazenamento =
-        EstadoArmazenamento::AGUARDANDO;
-
-    bool arquivoSalvo = false;
-
-    String cabecalhoCSV;
-
-    const char *CAMINHO_CSV =
-        "/ultimo_lancamento.csv";
-
-    const char *CAMINHO_TEMPORARIO =
-        "/experimento_temporario.csv";
-
-    bool escreverAmostra(
-        File &arquivo,
-        const DadoSensor &amostra)
+    if (pressao <= 0.0f || !isfinite(pressao))
     {
-        // Registra os dados brutos na ordem do cabecalho CSV.
-        return
-            arquivo.print(amostra.timestamp_ms) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.pressao, 2) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.temp, 2) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.ax, 5) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.ay, 5) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.az, 5) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.gx, 6) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.gy, 6) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.gz, 6) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.mx, 3) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.my, 3) > 0 &&
-            arquivo.print(",") > 0 &&
-            arquivo.print(amostra.mz, 3) > 0 &&
-            arquivo.println() == 2;
+        Serial.println("Pressão inicial inválida!");
+        estadoArmazenamento =EstadoArmazenamento::ERRO_AO_SALVAR;
+        return false;
     }
+
+    pressaoInicial = pressao;
+
+    return true;
+}
+
+bool escreverAmostra(
+    File &arquivo,
+    const DadoSensor &amostra,
+    float altitudeBruta,
+    float altitudeFiltrada)
+{
+    return
+        arquivo.print(amostra.timestamp_ms) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.pressao, 2) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.temp, 2) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.ax, 5) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.ay, 5) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.az, 5) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.gx, 6) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.gy, 6) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(amostra.gz, 6) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(altitudeBruta, 3) > 0 &&
+        arquivo.print(",") > 0 &&
+        arquivo.print(altitudeFiltrada, 3) > 0 &&
+        arquivo.println() == 2;
 }
 
 bool iniciarArmazenamento()
@@ -176,6 +189,8 @@ bool registrarAmostra(
 
 bool finalizarArmazenamento()
 {
+    FiltroKalmanAltitude filtro = inicializarFiltroKalman(0.0f, 1.0f, 0.01f, 0.25f);
+
     coletaEmAndamento = false;
 
     if (arquivoSalvo)
@@ -218,33 +233,29 @@ bool finalizarArmazenamento()
         inicio = indicePreLancamento;
     }
 
-    for (size_t i = 0;
-         i < quantidadePreLancamento &&
-         sucesso;
-         i++)
-    {
-        size_t indice =
-            (inicio + i) %
-            CAPACIDADE_PRE_LANCAMENTO;
 
-        sucesso =
-            escreverAmostra(
-                arquivo,
-                amostras[indice]);
+    for (size_t i = 0; i < quantidadePreLancamento && sucesso; i++) {
+        size_t indice = (inicio + i) % CAPACIDADE_PRE_LANCAMENTO;
+
+        float altitudeBruta = obterAlturaRelativa(pressaoInicial, amostras[indice].pressao);
+
+        atualizarFiltroKalman(filtro, altitudeBruta);
+
+        float altitudeFiltrada = filtro.estimativa;
+
+        sucesso = escreverAmostra( arquivo, amostras[indice], altitudeBruta, altitudeFiltrada);
     }
 
-    for (size_t i = 0;
-         i < quantidadePosLancamento &&
-         sucesso;
-         i++)
-    {
-        size_t indice =
-            CAPACIDADE_PRE_LANCAMENTO + i;
+    for (size_t i = 0; i < quantidadePosLancamento && sucesso; i++) {
+        size_t indice = CAPACIDADE_PRE_LANCAMENTO + i;
 
-        sucesso =
-            escreverAmostra(
-                arquivo,
-                amostras[indice]);
+        float altitudeBruta = obterAlturaRelativa( pressaoInicial, amostras[indice].pressao);
+
+        atualizarFiltroKalman(filtro, altitudeBruta);
+
+        float altitudeFiltrada = filtro.estimativa;
+
+        sucesso = escreverAmostra( arquivo, amostras[indice], altitudeBruta, altitudeFiltrada);
     }
 
     arquivo.flush();

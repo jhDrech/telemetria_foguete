@@ -1,12 +1,7 @@
 #include "filtro_kalman.h"
 #include <cmath>
 
-FiltroKalmanAltitude inicializarFiltroKalman(
-    float estimativa,
-    float incerteza,
-    float ruidoProcesso,
-    float ruidoMedicao
-) {
+FiltroKalmanAltitude inicializarFiltroKalman( float estimativa, float incerteza, float ruidoProcesso, float ruidoMedicao) {
     if (!std::isfinite(estimativa) ||
         !std::isfinite(incerteza) ||
         !std::isfinite(ruidoProcesso) ||
@@ -26,9 +21,7 @@ FiltroKalmanAltitude inicializarFiltroKalman(
 
     return filtro;
 }
-void atualizarFiltroKalman(
-    FiltroKalmanAltitude& filtro, float altitudeMedida_m
-) {
+void atualizarFiltroKalman( FiltroKalmanAltitude& filtro, float altitudeMedida_m) {
 
     if (!std::isfinite(altitudeMedida_m)) return;
 

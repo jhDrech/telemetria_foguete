@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "sensores.h"
+#include <LittleFS.h>
 
 // ========================================================
 // CONFIGURACAO DO REGISTRO EM MEMORIA
@@ -40,13 +41,11 @@ enum class EstadoArmazenamento
 
 bool iniciarArmazenamento();
 
-bool criarArquivoNovoVoo(
-    const char *cabecalho);
+bool criarArquivoNovoVoo(const char *cabecalho);
 
 bool confirmarLancamentoArmazenamento();
 
-bool registrarAmostra(
-    const DadoSensor &amostra);
+bool registrarAmostra(const DadoSensor &amostra);
 
 bool finalizarArmazenamento();
 
@@ -55,5 +54,6 @@ bool gravacaoEmAndamento();
 EstadoArmazenamento obterEstadoArmazenamento();
 
 bool tentarSalvarNovamente();
-
+bool definirPressaoReferencia(float pressaoInicial);
+bool escreverAmostra(File& arquivo, const DadoSensor& amostra, float altitudeBruta, float altitudeFiltrada);
 #endif

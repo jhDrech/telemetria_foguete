@@ -46,12 +46,13 @@ static const int ANGULO_ACIONAMENTO = 60;
 static EstadoParaquedas ultimoEstado = EstadoParaquedas::AGUARDANDO;
 
 const char *CABECALHO_CSV =
-    "timestamp_ms,"
-    "pressao,"
-    "temp,"
-    "ax,ay,az,"
-    "gx,gy,gz,"
-    "mx,my,mz";
+"timestamp_ms,"
+"pressao,"
+"temp,"
+"ax,ay,az,"
+"gx,gy,gz,"
+"altitude_sem_kalman_m,"
+"altitude_com_kalman_m";
 
 void setup()
 {
@@ -167,6 +168,9 @@ void setup()
     linhaCSV.reserve(512);
 
     inicioTesteMs = millis();
+#ifdef MODO_HIL
+    Serial.println("# HIL_READY");
+#endif
 }
 
 void loop()
@@ -208,6 +212,12 @@ void loop()
         inicioTesteMs = millis();
         return;
     }
+
+    if (!definirPressaoReferencia(pressaoInicial)){
+        Serial.println("Erro ao definir pressão de referência!");
+        return;
+    }
+
 
     // ALTITUDE RELATIVA
 
@@ -352,9 +362,13 @@ void loop()
     linhaCSV += String(dado.gx, 6) + ",";
     linhaCSV += String(dado.gy, 6) + ",";
     linhaCSV += String(dado.gz, 6) + ",";
-    linhaCSV += String(dado.mx, 3) + ",";
-    linhaCSV += String(dado.my, 3) + ",";
-    linhaCSV += String(dado.mz, 3);
+
+    // ALTITUDE RELATIVA
+    linhaCSV += String(estimado.altitude_relativa, 3) + ",";
+
+    // ALTITUDE FILTRADA PELO KALMAN
+    linhaCSV += String(filtroAltitude.estimativa, 3);
+
 
     // // QUATERNION
     // linhaCSV += String(dado.q0, 7) + ",";

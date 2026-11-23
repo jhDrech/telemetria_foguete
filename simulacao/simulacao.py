@@ -9,16 +9,20 @@ from pathlib import Path
 PORTA = "/dev/ttyACM0"
 BAUDRATE = 115200
 INTERVALO = 0.02  # 20 ms = 50 Hz
+DURACAO_SIMULACAO_S = 38  # Inclui repouso apos o voo para permitir o salvamento
+TIMEOUT_PRONTO_S = 30
 
 CABECALHO = [
     "timestamp_ms", "pressao", "temp",
     "ax", "ay", "az",
     "gx", "gy", "gz",
-    "mx", "my", "mz"
+    "altitude_semKalman", "altitude_comKalman"
 ]
 
 respostas = []
 diagnosticos_filtro = []
+hil_pronto = False
+csv_salvo = False
 
 PRESSAO_INICIAL = 100000.0
 
@@ -58,7 +62,7 @@ def simular_voo(tempo):
 buffer_serial = bytearray()
 
 def receber_respostas(esp):
-    global buffer_serial
+    global buffer_serial, hil_pronto, csv_salvo
 
     quantidade = esp.in_waiting
 
@@ -93,6 +97,16 @@ def receber_respostas(esp):
 
             continue
 
+        if resposta == "# HIL_READY":
+            hil_pronto = True
+            print("ESP32: HIL pronto para receber amostras")
+            continue
+
+        if "CSV salvo:" in resposta or "CSV salvo e disponivel" in resposta:
+            csv_salvo = True
+            print(f"ESP32: {resposta}")
+            continue
+
         # Mensagens de diagnóstico
         if resposta.startswith("#"):
             print(f"ESP32: {resposta}")
@@ -101,7 +115,7 @@ def receber_respostas(esp):
         # Dados CSV
         campos = resposta.split(",")
 
-        if len(campos) != 12:
+        if len(campos) != 11:
             print(f"Resposta invalida: {resposta}")
             continue
 
@@ -120,15 +134,25 @@ def receber_respostas(esp):
 
 try:
     with serial.Serial(PORTA, BAUDRATE, timeout=0.1) as esp:
-        time.sleep(2)
+        # Evita enviar pressões de calibração enquanto o ESP32 ainda faz setup.
+        print("Aguardando ESP32 iniciar o HIL...")
+        prazo_pronto = time.monotonic() + TIMEOUT_PRONTO_S
+        while not hil_pronto and time.monotonic() < prazo_pronto:
+            receber_respostas(esp)
+            time.sleep(0.01)
+
+        if not hil_pronto:
+            raise RuntimeError(
+                "ESP32 nao enviou # HIL_READY. Confira a porta, "
+                "o firmware MODO_HIL e reinicie a placa."
+            )
 
         print("Iniciando simulacao de repouso...")
-
         inicio = time.monotonic()
 
         altitudes_verdadeiras = {}
         
-        for i in range(650):
+        for i in range(int(DURACAO_SIMULACAO_S / INTERVALO)):
             #tempo da simulacao
             timestamp = i * 20
             tempo = timestamp / 1000.0
@@ -193,4 +217,5 @@ finally:
         escritor.writerows(respostas)
     
     print(f"Amostras recebidas: {len(respostas)}")
+    print(f"Salvamento no ESP32 confirmado pelo log: {csv_salvo}")
     print(f"Simulacao salva em: {nome_arquivo}")
