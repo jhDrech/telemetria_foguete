@@ -1,0 +1,242 @@
+diff --git a/include/detector_lancamento.h b/include/detector_lancamento.h
+index bc66968..8910486 100644
+--- a/include/detector_lancamento.h
++++ b/include/detector_lancamento.h
+@@ -7,15 +7,12 @@ struct DetectorLancamento {
+     bool lancamentoDetectado;
+ };
+ 
+-constexpr float ALTITUDE_MINIMA_LANCAMENTO_M = 5.0f; // metros
++constexpr float ACELERACAO_MINIMA_LANCAMENTO = 19.6133f; // m/s²
++constexpr float ALTITUDE_MINIMA_LANCAMENTO = 5.0f; // metros
+ constexpr int LEITURAS_PARA_DETECTAR_LANCAMENTO = 3;
+ 
++void atualizarDetectorLancamentoBMP(DetectorLancamento &detectorLancamento, float altitudeRelativa, bool altitudeValida);
+ DetectorLancamento inicializarDetectorLancamento();
+ 
+-void atualizarDetectorLancamento(
+-    DetectorLancamento& detector,
+-    float aceleracaoVertical,
+-    bool aceleracaoValida
+-);
+-
++void atualizarDetectorLancamento( DetectorLancamento& detector, float aceleracaoVertical, bool aceleracaoValida);
+ #endif
+diff --git a/include/sensores.h b/include/sensores.h
+index 782fcb9..ff3bcd9 100644
+--- a/include/sensores.h
++++ b/include/sensores.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ #include <Arduino.h>
+ 
++extern bool icmDisponivel;
+ bool iniciarSensores();
+ struct DadoSensor{
+     uint32_t timestamp_ms;
+@@ -15,9 +16,6 @@ struct DadoSensor{
+     float gy = NAN;
+     float gz = NAN;
+ 
+-    float mx = NAN;
+-    float my = NAN;
+-    float mz = NAN;
+ };
+ bool lerSensores(DadoSensor& dados);
+ 
+@@ -30,14 +28,10 @@ struct DadoEstimado{
+     float gx = NAN;
+     float gy = NAN;
+     float gz = NAN;
+-
+-    float mx = NAN;
+-    float my = NAN;
+-    float mz = NAN;
+-
+     // obtidos durante o voo para definição dos estados
+-    float altitude_relativa = NAN;
+-    float velocidade_vertical = NAN;
++    float altura_relativa = NAN;
++    float velocidade_total = NAN;
++    // float velocidade_vertical = NAN;
+ };
+ 
+ bool atualizarPressaoInicial(float& pressaoAtual);
+diff --git a/src/detector_lancamento.cpp b/src/detector_lancamento.cpp
+index b0c25db..f80df64 100644
+--- a/src/detector_lancamento.cpp
++++ b/src/detector_lancamento.cpp
+@@ -10,21 +10,18 @@ DetectorLancamento inicializarDetectorLancamento()
+     return detectorLancamento;
+ }
+ 
+-void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento,
+-                                 float aceleracao_vertical,
+-                                 bool aceleracao_vertical_valida)
++void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento, float aceleracaoTotal, bool aceleracaoValida)
+ {
+-
+     if (detectorLancamento.lancamentoDetectado) {
+         return;
+     }
+-        if (aceleracao_vertical_valida &&
+-        aceleracao_vertical > ALTITUDE_MINIMA_LANCAMENTO_M) {
++
++    if (aceleracaoValida &&
++        aceleracaoTotal > ACELERACAO_MINIMA_LANCAMENTO) {
+ 
+         detectorLancamento.leiturasAcimaDoLimite++;
+     }
+-    else{
+-
++    else {
+         detectorLancamento.leiturasAcimaDoLimite = 0;
+     }
+ 
+@@ -32,3 +29,23 @@ void atualizarDetectorLancamento(DetectorLancamento &detectorLancamento,
+         detectorLancamento.lancamentoDetectado = true;
+     }
+ }
++
++void atualizarDetectorLancamentoBMP(DetectorLancamento &detectorLancamento, float altitudeRelativa, bool altitudeValida)
++{
++    if(detectorLancamento.lancamentoDetectado){
++        return;
++    }
++
++    if(altitudeValida && altitudeRelativa > ALTITUDE_MINIMA_LANCAMENTO){
++        detectorLancamento.leiturasAcimaDoLimite++;
++    }
++    else{
++        detectorLancamento.leiturasAcimaDoLimite = 0;
++    }
++
++    if(detectorLancamento.leiturasAcimaDoLimite >= LEITURAS_PARA_DETECTAR_LANCAMENTO){
++        detectorLancamento.lancamentoDetectado = true;
++    }
++}
++
++
+diff --git a/src/main.cpp b/src/main.cpp
+index 153abdd..e068ef4 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -181,27 +181,6 @@ void loop()
+         return;
+     }
+ 
+-    // ========================================================
+-    // ORIENTACAO / CONVERGENCIA DO DMP
+-    // ========================================================
+-
+-    // EstadoDMP estadoDMP = atualizarEstadoDMP(dado);
+-
+-    // ========================================================
+-    // ACELERACAO LINEAR
+-    // ========================================================
+-
+-    // calcularAceleracaoLinear(dado, estadoDMP.dmp_pronto);
+-
+-    // VELOCIDADE VERTICAL
+-
+-    // atualizarVelocidadeVertical(dado);
+-
+-    // atualizarDetectorLancamento(
+-    //     detectorLancamento,
+-    //     dado.aceleracao_vertical,
+-    //     dado.aceleracao_vertical_valida);
+-
+     // ALTITUDE RELATIVA
+ 
+     bool altitudeValida =
+@@ -211,15 +190,15 @@ void loop()
+         isfinite(pressaoInicial) &&
+         pressaoInicial > 0.0f;
+ 
+-    estimado.altitude_relativa = NAN;
++    estimado.altura_relativa = NAN;
+ 
+     if (altitudeValida)
+     {
+-        estimado.altitude_relativa = obterAlturaRelativa(
++        estimado.altura_relativa = obterAlturaRelativa(
+             pressaoInicial,
+             dado.pressao);
+ 
+-        altitudeValida = isfinite(estimado.altitude_relativa);
++        altitudeValida = isfinite(estimado.altura_relativa);
+     }
+     // Aplicação do Filtro
+ 
+@@ -227,18 +206,31 @@ void loop()
+     {
+         atualizarFiltroKalman(
+             filtroAltitude,
+-            estimado.altitude_relativa);
++            estimado.altura_relativa);
+     }
+ 
+     altitudeValida =
+         altitudeValida && isfinite(filtroAltitude.estimativa);
+ 
+-    // DETECCAO DO LANCAMENTO POR ALTITUDE
++    // DETECCAO DO LANCAMENTO
++
++    if (icmDisponivel) {
+ 
+-    atualizarDetectorLancamento(
+-        detectorLancamento,
+-        filtroAltitude.estimativa,
+-        altitudeValida);
++        float aceleracaoTotal = obterAceleracaoTotal(dado);
++        bool aceleracaoValida = isfinite(aceleracaoTotal);
++
++        atualizarDetectorLancamento(
++            detectorLancamento,
++            aceleracaoTotal,
++            aceleracaoValida);
++    }
++    else {
++
++        atualizarDetectorLancamentoBMP(
++            detectorLancamento,
++            estimado.altura_relativa,
++            altitudeValida);
++    }
+ 
+     // INICIO DA CONTAGEM E CONFIRMACAO DO LANCAMENTO
+ 
+@@ -297,7 +289,7 @@ void loop()
+     linhaCSV = String(timestampMs) + ",";
+     linhaCSV += String(dado.pressao, 2) + ",";
+     linhaCSV += String(dado.temperatura, 2) + ",";
+-    linhaCSV += String(estimado.altitude_relativa, 3) + ",";
++    linhaCSV += String(estimado.altura_relativa, 3) + ",";
+     linhaCSV += String(
+         altitudeValida ? filtroAltitude.estimativa : NAN,
+         3);
+@@ -370,7 +362,7 @@ void loop()
+         amostra.timestamp_ms = timestampMs;
+         amostra.pressao_pa = dado.pressao;
+         amostra.temperatura_c = dado.temperatura;
+-        amostra.altitude_relativa_bruta_m = estimado.altitude_relativa;
++        amostra.altitude_relativa_bruta_m = estimado.altura_relativa;
+         amostra.altitude_relativa_filtrada_m =
+             altitudeValida ? filtroAltitude.estimativa : NAN;
+ 
+diff --git a/src/sensores.cpp b/src/sensores.cpp
+index 2b9bd04..fc9bc21 100644
+--- a/src/sensores.cpp
++++ b/src/sensores.cpp
+@@ -53,10 +53,7 @@ bool lerSensores(DadoSensor& dado){
+             dado.gx = icm.gyrX() * CONVERCAO_GIRO;
+             dado.gy = icm.gyrY() * CONVERCAO_GIRO;
+             dado.gz = icm.gyrZ() * CONVERCAO_GIRO;
+-            
+-            dado.mx = icm.magX();
+-            dado.my = icm.magY();
+-            dado.mz = icm.magZ();
++
+         }
+     }
+     

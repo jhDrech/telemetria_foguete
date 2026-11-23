@@ -11,7 +11,7 @@
 constexpr uint32_t TAXA_AMOSTRAGEM_HZ = 50;
 
 constexpr uint32_t TEMPO_PRE_LANCAMENTO_MS = 5000;
-constexpr uint32_t TEMPO_POS_LANCAMENTO_MS = 20000;
+constexpr uint32_t TEMPO_POS_LANCAMENTO_MS = 30000;
 
 constexpr uint32_t INTERVALO_AMOSTRAGEM_MS =
     1000 / TAXA_AMOSTRAGEM_HZ;

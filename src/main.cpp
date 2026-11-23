@@ -11,6 +11,7 @@
 #include "filtro_kalman.h"
 #include "armazenamento.h"
 #include "rede_wifi.h"
+#include "simulacao.h"
 
 // Momento em que o experimento realmente começa.
 // Assim o timestamp do CSV começa próximo de zero,
@@ -64,7 +65,9 @@ void setup()
     // ========================================================
     // INICIALIZACAO DOS SENSORES
     // ========================================================
-
+#ifdef MODO_HIL
+    iniciarHIL();
+#else
     if (!iniciarSensores())
     {
 
@@ -73,7 +76,7 @@ void setup()
             delay(1000);
         }
     }
-
+#endif
     // A referencia barometrica sera coletada sem bloquear no loop,
     // usando atualizarPressaoInicial() da implementacao do Joao.
 
@@ -105,10 +108,11 @@ void setup()
     controleParaquedas = inicializarControleParaquedas();
 
     detectorLancamento = inicializarDetectorLancamento();
-
+#ifndef MODO_HIL
     // configuração do servo
     servoParaquedas.attach(10);
     servoParaquedas.write(ANGULO_INICIAL);
+#endif
 
     if (!iniciarArmazenamento())
     {
@@ -173,15 +177,33 @@ void loop()
     // ========================================================
 
     DadoSensor dado{};
-    bool leituraValida = lerSensores(dado);
+#ifdef MODO_HIL
+        bool leituraValida = lerDadosHIL(dado);
+#else
+        bool leituraValida = lerSensores(dado);
+#endif
+
+#ifdef MODO_HIL
+    if(!leituraValida){
+        atualizarWiFi();
+        return;
+    }
+#endif
+
     DadoEstimado estimado{};
 
     if (!pressaoPronta)
     {
+    #ifdef MODO_HIL
+        pressaoPronta = atualizarPressaoInicialHIL(dado.pressao, pressaoInicial);
+    #else
         pressaoPronta = atualizarPressaoInicial(pressaoInicial);
+    #endif
         // Mantem o servidor acessivel enquanto a referencia e calculada.
         atualizarWiFi();
+    #ifndef MODO_HIL
         delay(INTERVALO_AMOSTRAGEM_MS);
+    #endif
         // O tempo do experimento comeca depois da referencia estar pronta.
         inicioTesteMs = millis();
         return;
@@ -191,9 +213,9 @@ void loop()
 
     bool altitudeValida =
         leituraValida &&
-        isfinite(dado.pressao) &&
+        dado.pressao &&
         dado.pressao > 0.0f &&
-        isfinite(pressaoInicial) &&
+        pressaoInicial &&
         pressaoInicial > 0.0f;
 
     estimado.altitude_relativa = NAN;
@@ -210,13 +232,22 @@ void loop()
 
     if (altitudeValida)
     {
-        atualizarFiltroKalman(
-            filtroAltitude,
-            estimado.altitude_relativa);
+        atualizarFiltroKalman( filtroAltitude, estimado.altitude_relativa);
     }
 
-    altitudeValida =
-        altitudeValida && isfinite(filtroAltitude.estimativa);
+#ifdef MODO_HIL
+    if(altitudeValida){
+        Serial.print("# HIL_FILTRO,");
+        Serial.print(dado.timestamp_ms);
+        Serial.print(",");
+        Serial.print(estimado.altitude_relativa, 5);
+        Serial.print(",");
+        Serial.println(filtroAltitude.estimativa, 5);
+    }
+#endif
+
+    // altitudeValida =
+    //     altitudeValida && isfinite(filtroAltitude.estimativa);
 
     // DETECCAO DO LANCAMENTO
 
@@ -243,6 +274,9 @@ void loop()
     if (detectorLancamento.lancamentoDetectado &&
         !contagemRegistroIniciada)
     {
+    #ifdef MODO_HIL
+        Serial.println("#HIL: LANCAMENTO DETECTADO");
+    #endif
         instanteLancamentoMs = millis();
         contagemRegistroIniciada = true;
 
@@ -261,9 +295,15 @@ void loop()
 
     if (detectorLancamento.lancamentoDetectado && altitudeValida)
     {
-        atualizarDetectorApogeu(
-            detectorApogeu,
-            filtroAltitude.estimativa);
+        atualizarDetectorApogeu(detectorApogeu, filtroAltitude.estimativa);
+    #ifdef MODO_HIL
+        static bool apogeuNotificado = false;
+           
+        if (detectorApogeu.apogeuDetectado && !apogeuNotificado) {
+            Serial.println("# HIL: APOGEU DETECTADO");
+            apogeuNotificado = true;
+        }
+    #endif
     }
 
     paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
@@ -273,10 +313,17 @@ void loop()
         switch (controleParaquedas.estado)
         {
         case EstadoParaquedas::ACIONADO:
+        #ifdef MODO_HIL
+            Serial.println("# HIL: PARAQUEDAS ACIONADO (VIRTUAL)");
+        #endif
+        #ifndef MODO_HIL
             servoParaquedas.write(ANGULO_ACIONAMENTO);
+        #endif
             break;
         case EstadoParaquedas::FINALIZADO:
+        #ifndef MODO_HIL
             servoParaquedas.write(ANGULO_INICIAL);
+        #endif
             break;
         default:
             break;
@@ -289,7 +336,11 @@ void loop()
     // TEMPO RELATIVO DO EXPERIMENTO
     // ========================================================
 
+#ifdef MODO_HIL
+    uint32_t timestampMs = dado.timestamp_ms;
+#else
     uint32_t timestampMs = millis() - inicioTesteMs;
+#endif
 
     // CSV dos dados brutos do sensor
     linhaCSV = String(timestampMs) + ",";
@@ -421,6 +472,7 @@ void loop()
         atualizarWiFi();
     }
 
+#ifndef MODO_HIL
     // Aguarda somente o tempo restante para completar o intervalo.
     uint32_t duracaoCicloMs = millis() - inicioCicloMs;
 
@@ -428,4 +480,5 @@ void loop()
     {
         delay(INTERVALO_AMOSTRAGEM_MS - duracaoCicloMs);
     }
+#endif
 };

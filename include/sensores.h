@@ -38,7 +38,7 @@ struct DadoEstimado{
 
     // obtidos durante o voo para definição dos estados
     float altitude_relativa = NAN;
-    float velocidade_vertical = NAN;
+    // float velocidade_vertical = NAN;
 };
 
 bool atualizarPressaoInicial(float& pressaoAtual);
