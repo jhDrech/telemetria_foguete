@@ -92,7 +92,7 @@ void setup()
     filtroAltitude = inicializarFiltroKalman(
         0.0f,  // estimativa inicial (m)
         1.0f,  // incerteza inicial (m²)
-        0.01f, // ruidoProcesso (m²)
+        0.06f, // ruidoProcesso (m²)
         0.06068f  // ruidoMedicao (m²)
     );
 
@@ -286,8 +286,10 @@ void loop()
     {
     #ifdef MODO_HIL
         Serial.println("#HIL: LANCAMENTO DETECTADO");
-    #endif
+        instanteLancamentoMs = dado.timestamp_ms;
+    #else
         instanteLancamentoMs = millis();
+    #endif        
         contagemRegistroIniciada = true;
 
         if (!confirmarLancamentoArmazenamento())
@@ -426,9 +428,13 @@ void loop()
 
         bool amostraRegistrada = registrarAmostra(amostra);
 
-        bool tempoEncerrado =
-            contagemRegistroIniciada &&
-            millis() - instanteLancamentoMs >= TEMPO_POS_LANCAMENTO_MS;
+        #ifdef MODO_HIL
+            uint32_t tempoDecorrido = timestampMs - instanteLancamentoMs;
+        #else
+            uint32_t tempoDecorrido = millis() - instanteLancamentoMs;
+        #endif
+
+        bool tempoEncerrado = contagemRegistroIniciada && millis() - instanteLancamentoMs >= TEMPO_POS_LANCAMENTO_MS;
 
         if (!amostraRegistrada || tempoEncerrado)
         {
