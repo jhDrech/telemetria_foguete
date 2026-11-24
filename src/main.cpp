@@ -165,9 +165,6 @@ void setup()
         Serial.println("Wi-Fi indisponivel. Gravacao local continua.");
     }
 
-    // Teste de exibicao do resultado na pagina web
-    atualizarResultado(35.72f);
-
     linhaCSV.reserve(512);
 
     inicioTesteMs = millis();
@@ -322,12 +319,15 @@ void loop()
         {
             Serial.println("# HIL: APOGEU DETECTADO");
             Serial.printf("# HIL: APOGEU EM %lu ms\n", (unsigned long)millis());
+
+            
             apogeuNotificado = true;
         }
 #endif
     }
 
     paraquedas(controleParaquedas, detectorApogeu.apogeuDetectado);
+    atualizarResultado(detectorApogeu.maiorAltitude_m);
 
     if (controleParaquedas.estado != ultimoEstado)
     {
