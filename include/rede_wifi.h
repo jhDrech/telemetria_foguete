@@ -3,5 +3,5 @@
 
 void atualizarWiFi();
 bool iniciarWiFi();
-
+void atualizarResultado(float valor);
 #endif
