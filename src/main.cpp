@@ -93,7 +93,7 @@ void setup()
         0.0f,  // estimativa inicial (m)
         1.0f,  // incerteza inicial (m²)
         0.01f, // ruidoProcesso (m²)
-        0.25f  // ruidoMedicao (m²)
+        0.06068f  // ruidoMedicao (m²)
     );
 
     // INICIALIZACAO DO MOVIMENTO
@@ -311,6 +311,7 @@ void loop()
            
         if (detectorApogeu.apogeuDetectado && !apogeuNotificado) {
             Serial.println("# HIL: APOGEU DETECTADO");
+            Serial.printf("# HIL: APOGEU EM %lu ms\n", (unsigned long)millis());
             apogeuNotificado = true;
         }
     #endif

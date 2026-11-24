@@ -26,7 +26,14 @@ bool iniciarSensores(){
         return false;
     }else{
         bmpDisponivel = true;
+        bmp.setSampling(
+            Adafruit_BMP280::MODE_NORMAL,
+            Adafruit_BMP280::SAMPLING_X1,
+            Adafruit_BMP280::SAMPLING_X4,
+            Adafruit_BMP280::FILTER_X4
+        );
     }
+
 
     if(icm.status != ICM_20948_Stat_Ok){
         icmDisponivel = false;
